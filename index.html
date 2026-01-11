@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>班級成績管理與分析系統</title>
+    <title>班級成績管理與分析系統 (繽紛版)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -15,7 +15,7 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- SheetJS (xlsx) for Excel Export -->
+    <!-- SheetJS (xlsx) for Excel Export/Import -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
     <!-- FontAwesome for Icons -->
@@ -23,69 +23,177 @@
 
     <style>
         body {
-            background-color: #f3f4f6;
+            background-color: #fffbeb; /* 暖色背景 */
             font-family: 'Noto Sans TC', sans-serif;
+            overflow-x: hidden;
         }
-        /* Custom scrollbar for the table */
+        
+        /* Decorative Background Shapes */
+        .bg-shape {
+            position: fixed;
+            z-index: -1;
+            opacity: 0.6;
+        }
+        .shape-1 {
+            top: -100px;
+            right: -50px;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #fcd34d 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            filter: blur(40px);
+        }
+        .shape-2 {
+            bottom: -50px;
+            left: -100px;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #fda4af 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            filter: blur(50px);
+        }
+
         .table-container::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
+            height: 12px;
+            width: 12px;
         }
         .table-container::-webkit-scrollbar-track {
-            background: #f1f1f1; 
+            background: #fdf6e3; 
+            border-radius: 6px;
         }
         .table-container::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
+            background: #fca5a5; 
+            border-radius: 6px;
+            border: 3px solid #fdf6e3;
         }
         .table-container::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
+            background: #f87171; 
         }
+        
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { 
             -webkit-appearance: none; 
             margin: 0; 
         }
-        /* Style for empty inputs to make them distinct */
+        
         .empty-grade {
-            background-color: #fef9c3; /* Yellow-100 */
+            background-color: #fff7ed;
+            border: 2px dashed #fdba74;
+            transition: all 0.2s;
         }
         .empty-grade:focus {
             background-color: #ffffff;
+            border: 2px solid #f97316;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
         }
+        
         .tab-active {
-            background-color: #2563eb;
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
             color: white;
-            border-color: #2563eb;
+            border-color: transparent;
+            box-shadow: 0 2px 4px rgba(234, 88, 12, 0.3);
+            transform: translateY(-1px);
         }
         .tab-inactive {
-            background-color: white;
-            color: #4b5563;
-            border-color: #e5e7eb;
+            background-color: #fff7ed;
+            color: #9a3412;
+            border-color: #fed7aa;
         }
         .tab-inactive:hover {
-            background-color: #f9fafb;
-            color: #1d4ed8;
+            background-color: #ffedd5;
+            color: #ea580c;
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #d97706;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #fed7aa;
+            border-top: 5px solid #f97316;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Rank Effects */
+        .rank-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .rank-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .rank-1 {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 2px solid #fbbf24;
+            position: relative;
+            overflow: hidden;
+        }
+        .rank-1::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.1) 0%, transparent 60%);
+            animation: rotate 10s linear infinite;
+        }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .rank-2 {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border: 2px solid #94a3b8;
+        }
+        .rank-3 {
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border: 2px solid #fdba74;
+        }
+        
+        @keyframes bounce-gentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .crown-icon {
+            animation: bounce-gentle 2s infinite;
+        }
+
+        /* Delete column button */
+        .delete-col-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        th:hover .delete-col-btn {
+            opacity: 1;
         }
     </style>
 </head>
 <body>
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // 生成初始的20個成績項目名稱
         const INITIAL_HEADERS = Array.from({ length: 20 }, (_, i) => `項目${i + 1}`);
+        const STORAGE_KEY = "grade_system_v2_data"; 
 
-        // 預設的一筆範例資料
-        const INITIAL_STUDENTS = [
-            { id: 1, className: "101", number: "01", name: "張小明", grades: Array(20).fill("") },
-            { id: 2, className: "101", number: "02", name: "李大華", grades: Array(20).fill("") },
-            { id: 3, className: "102", number: "01", name: "王小美", grades: Array(20).fill("") },
-        ];
-
-        // 統計級距定義
         const RANGES = [
             { label: "100分", check: (s) => s === 100 },
             { label: "90-99分", check: (s) => s >= 90 && s < 100 },
@@ -95,122 +203,206 @@
             { label: "60分以下", check: (s) => s < 60 },
         ];
 
-        function App() {
-            const [students, setStudents] = useState(INITIAL_STUDENTS);
-            const [headers, setHeaders] = useState(INITIAL_HEADERS);
-            const [activeTab, setActiveTab] = useState('input'); // 'input' or 'stats'
-            const [selectedStatItem, setSelectedStatItem] = useState(0); // Index of the header to analyze
-            const [editingHeader, setEditingHeader] = useState(null); // Which header is being renamed
-            
-            // 新增功能：班級分頁
-            const [currentClassView, setCurrentClassView] = useState("All"); // 'All' or specific className
-            const [customClasses, setCustomClasses] = useState([]); // Store manually added classes even if empty
+        // Cute Empty State Component
+        const EmptyState = ({ message, action, actionText }) => (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="bg-orange-100 p-6 rounded-full mb-4 shadow-sm">
+                    {/* Simple SVG Illustration */}
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 13H15M9 17H13M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21M3 7V5C3 3.89543 3.89543 3 5 3H9L11 5H19C20.1046 5 21 5.89543 21 7" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-700 mb-2">這裡空空的</h3>
+                <p className="text-gray-500 mb-6 max-w-sm">{message}</p>
+                {action && (
+                    <button onClick={action} className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transform transition hover:scale-105 active:scale-95">
+                        <i className="fa-solid fa-plus mr-2"></i>{actionText}
+                    </button>
+                )}
+            </div>
+        );
 
-            // 計算所有存在的班級 (包含有學生的班級和手動新增的空班級)
+        function App() {
+            const [students, setStudents] = useState([]);
+            const [headers, setHeaders] = useState(INITIAL_HEADERS);
+            const [customClasses, setCustomClasses] = useState([]); 
+            const [activeTab, setActiveTab] = useState('input');
+            const [selectedStatItem, setSelectedStatItem] = useState(0);
+            const [editingHeader, setEditingHeader] = useState(null);
+            const [currentClassView, setCurrentClassView] = useState("All");
+            const [isLoading, setIsLoading] = useState(true);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        setStudents(parsed.students || []);
+                        setHeaders(parsed.headers || INITIAL_HEADERS);
+                        setCustomClasses(parsed.customClasses || []);
+                    } catch (e) {
+                        console.error("讀取儲存資料失敗", e);
+                        setStudents([{ id: 1, className: "101", number: "01", name: "範例學生", grades: Array(20).fill("") }]);
+                    }
+                } else {
+                    setStudents([{ id: 1, className: "101", number: "01", name: "範例學生", grades: Array(20).fill("") }]);
+                }
+                setIsLoading(false);
+            }, []);
+
+            useEffect(() => {
+                if (!isLoading) {
+                    const dataToSave = { students, headers, customClasses };
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+                }
+            }, [students, headers, customClasses, isLoading]);
+
             const availableClasses = useMemo(() => {
                 const existingClasses = [...new Set(students.map(s => s.className || "未分類"))];
-                // 合併現有班級與手動新增的班級，並移除重複
                 const all = [...new Set([...existingClasses, ...customClasses])];
-                // 使用 localeCompare 進行自然排序 (讓 10 在 2 後面)
                 return all.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             }, [students, customClasses]);
 
-            // 根據目前分頁篩選顯示的學生
             const displayedStudents = useMemo(() => {
                 if (currentClassView === "All") return students;
                 return students.filter(s => (s.className || "未分類") === currentClassView);
             }, [students, currentClassView]);
 
-            // 新增學生
+            const classRankings = useMemo(() => {
+                const rankings = availableClasses.map(cls => {
+                    const classStudents = students.filter(s => (s.className || "未分類") === cls);
+                    // Handle dynamic headers access safely
+                    const gradeIndex = selectedStatItem;
+                    if (gradeIndex >= headers.length) return { className: cls, avg: -1, count: 0 };
+
+                    const validGrades = classStudents
+                        .map(s => s.grades[gradeIndex])
+                        .filter(g => g !== "" && g !== null && g !== undefined);
+                    
+                    const total = validGrades.reduce((a, b) => a + b, 0);
+                    const avg = validGrades.length > 0 ? (total / validGrades.length) : -1;
+
+                    return { className: cls, avg: parseFloat(avg.toFixed(2)), count: validGrades.length };
+                });
+                return rankings.filter(r => r.avg >= 0).sort((a, b) => b.avg - a.avg);
+            }, [students, availableClasses, selectedStatItem, headers]);
+
             const addStudent = () => {
                 const newId = students.length > 0 ? Math.max(...students.map(s => s.id)) + 1 : 1;
-                
-                // 決定新學生的班級
                 let targetClass = "101";
-                if (currentClassView !== "All") {
-                    targetClass = currentClassView;
-                } else if (students.length > 0) {
-                    targetClass = students[students.length - 1].className;
-                }
+                if (currentClassView !== "All") targetClass = currentClassView;
+                else if (students.length > 0) targetClass = students[students.length - 1].className;
                 
-                setStudents([
-                    ...students, 
-                    { 
-                        id: newId, 
-                        className: targetClass, 
-                        number: "", 
-                        name: "", 
-                        grades: Array(20).fill("") 
-                    }
-                ]);
+                // Initialize grades array with current header length
+                setStudents(prev => [...prev, { id: newId, className: targetClass, number: "", name: "", grades: Array(headers.length).fill("") }]);
             };
 
-            // 新增一個班級分頁 (優化版)
             const handleAddClassTab = () => {
                 const newClass = prompt("請輸入新班級名稱：");
                 if (newClass && newClass.trim() !== "") {
                     const trimmedClass = newClass.trim();
-                    
-                    // 檢查是否已存在
                     if (availableClasses.includes(trimmedClass)) {
                         alert(`「${trimmedClass}」班級已經存在，已為您切換至該分頁。`);
                         setCurrentClassView(trimmedClass);
                         return;
                     }
-
-                    // 使用 callback 更新確保狀態最新
                     setCustomClasses(prev => [...prev, trimmedClass]);
                     setCurrentClassView(trimmedClass);
                 }
             };
 
-            // 刪除目前選取的班級
-            const handleDeleteClass = () => {
+            // Headers Management
+            const removeHeader = (index) => {
+                if (headers.length <= 1) {
+                    alert("至少保留一個項目！");
+                    return;
+                }
+                if (confirm(`確定刪除「${headers[index]}」嗎？\n這將刪除所有學生該項目的成績，無法復原！`)) {
+                    setHeaders(prev => prev.filter((_, i) => i !== index));
+                    setStudents(prev => prev.map(s => ({
+                        ...s,
+                        grades: s.grades.filter((_, i) => i !== index)
+                    })));
+                    // Adjust selected stat item if needed
+                    if (selectedStatItem >= index && selectedStatItem > 0) {
+                        setSelectedStatItem(prev => prev - 1);
+                    }
+                }
+            };
+
+            const addHeader = () => {
+                setHeaders(prev => [...prev, `項目${prev.length + 1}`]);
+                setStudents(prev => prev.map(s => ({
+                    ...s,
+                    grades: [...s.grades, ""]
+                })));
+            };
+
+            const copyHeadersToClipboard = () => {
+                const text = headers.join('\t');
+                navigator.clipboard.writeText(text).then(() => {
+                    alert("✅ 已複製項目名稱！\n\n您現在可以直接在 Excel 貼上作為表頭範本。");
+                }).catch(err => {
+                    console.error('Copy failed', err);
+                    alert("複製失敗，請手動複製。");
+                });
+            };
+
+            const handleRenameClass = () => {
                 if (currentClassView === "All") return;
                 
-                // 計算該班級學生數
-                const studentsToDelete = students.filter(s => (s.className || "未分類") === currentClassView);
-                const count = studentsToDelete.length;
+                const oldName = currentClassView;
+                const newName = prompt(`請輸入「${oldName}」的新名稱：`, oldName);
                 
-                const confirmMsg = count > 0 
-                    ? `確定要刪除「${currentClassView}班」嗎？\n\n警告：這將會刪除該班級 ${count} 位學生的所有資料，此動作無法復原！`
-                    : `確定要刪除「${currentClassView}班」分頁嗎？`; // 只有空班級的情況
+                if (newName === null) return;
 
-                if (window.confirm(confirmMsg)) {
-                    // 1. 刪除學生
+                const trimmedNewName = newName.trim();
+                
+                if (trimmedNewName === "") {
+                    alert("班級名稱不能為空！");
+                    return;
+                }
+                if (trimmedNewName === oldName) return;
+
+                if (availableClasses.includes(trimmedNewName)) {
+                    alert(`班級名稱「${trimmedNewName}」已存在，請使用不同名稱。`);
+                    return;
+                }
+
+                if (window.confirm(`確定要將「${oldName}」更名為「${trimmedNewName}」嗎？\n該班級的所有學生資料將會自動更新。`)) {
+                    setStudents(prev => prev.map(s => (s.className || "未分類") === oldName ? { ...s, className: trimmedNewName } : s));
+                    setCustomClasses(prev => prev.map(c => c === oldName ? trimmedNewName : c));
+                    setCurrentClassView(trimmedNewName);
+                }
+            };
+
+            const handleDeleteClass = () => {
+                if (currentClassView === "All") return;
+                const count = students.filter(s => (s.className || "未分類") === currentClassView).length;
+                if (window.confirm(count > 0 ? `確定刪除「${currentClassView}班」？將刪除 ${count} 筆資料！` : `確定刪除「${currentClassView}班」分頁？`)) {
                     setStudents(prev => prev.filter(s => (s.className || "未分類") !== currentClassView));
-                    
-                    // 2. 移除自訂班級標籤 (如果是手動新增的空班級)
                     setCustomClasses(prev => prev.filter(c => c !== currentClassView));
-                    
-                    // 3. 回到全部顯示
                     setCurrentClassView("All");
                 }
             };
 
-            // 刪除學生
             const removeStudent = (id) => {
-                if(window.confirm("確定要刪除這位學生嗎？")) {
-                    setStudents(students.filter(s => s.id !== id));
-                }
+                if(window.confirm("確定刪除這位學生？")) setStudents(prev => prev.filter(s => s.id !== id));
             };
 
-            // 更新學生基本資料
             const updateStudentInfo = (id, field, value) => {
-                setStudents(students.map(s => 
-                    s.id === id ? { ...s, [field]: value } : s
-                ));
+                setStudents(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
             };
 
-            // 更新成績
             const updateGrade = (id, index, value) => {
-                // 限制輸入 0-100 或空值
                 let numVal = value === "" ? "" : parseFloat(value);
                 if (numVal !== "" && (numVal < 0 || numVal > 100)) return;
-
-                setStudents(students.map(s => {
+                setStudents(prev => prev.map(s => {
                     if (s.id === id) {
                         const newGrades = [...s.grades];
+                        // Ensure array is large enough
+                        while (newGrades.length <= index) newGrades.push("");
                         newGrades[index] = numVal;
                         return { ...s, grades: newGrades };
                     }
@@ -218,479 +410,456 @@
                 }));
             };
 
-            // 更新標題名稱
             const updateHeader = (index, value) => {
                 const newHeaders = [...headers];
                 newHeaders[index] = value;
                 setHeaders(newHeaders);
             };
 
-            // --- 處理表頭貼上邏輯 ---
             const handleHeaderPaste = (e, startIndex) => {
                 e.preventDefault();
                 const clipboardData = e.clipboardData.getData('text');
                 if (!clipboardData) return;
-
-                // 以 Tab 或換行分割
                 const values = clipboardData.split(/\t|\n/).map(v => v.trim()).filter(v => v !== "");
                 
-                const newHeaders = [...headers];
-                values.forEach((val, i) => {
-                    if (startIndex + i < newHeaders.length) {
-                        newHeaders[startIndex + i] = val;
-                    }
-                });
-                setHeaders(newHeaders);
-                setEditingHeader(null); // 結束編輯模式
+                // Add columns if paste exceeds current headers
+                if (startIndex + values.length > headers.length) {
+                    const columnsToAdd = (startIndex + values.length) - headers.length;
+                    const additionalHeaders = Array(columnsToAdd).fill("").map((_, i) => `項目${headers.length + i + 1}`);
+                    
+                    // Update headers first
+                    const updatedHeaders = [...headers, ...additionalHeaders];
+                    const next = [...updatedHeaders];
+                    values.forEach((val, i) => { next[startIndex + i] = val; });
+                    setHeaders(next);
+
+                    // Update students to match new length
+                    setStudents(prev => prev.map(s => ({
+                         ...s,
+                         grades: [...s.grades, ...Array(columnsToAdd).fill("")]
+                    })));
+                } else {
+                    setHeaders(prev => {
+                        const next = [...prev];
+                        values.forEach((val, i) => { if (startIndex + i < next.length) next[startIndex + i] = val; });
+                        return next;
+                    });
+                }
+                setEditingHeader(null);
             };
 
-            // --- 處理 Excel 資料貼上邏輯 ---
             const handlePaste = (e, targetStudentId, startColType, startColIndex) => {
                 e.preventDefault();
                 const clipboardData = e.clipboardData.getData('text');
                 if (!clipboardData) return;
-
                 const rows = clipboardData.split(/\r\n|\n|\r/).filter(row => row.trim() !== '');
                 if (rows.length === 0) return;
-
-                // 找到起始學生在整個 students 陣列中的 index
                 const startStudentIndex = students.findIndex(s => s.id === targetStudentId);
-                if (startStudentIndex === -1 && rows.length > 0) return;
+                if (startStudentIndex === -1) return;
 
-                let newStudents = [...students];
-                let maxId = newStudents.length > 0 ? Math.max(...newStudents.map(s => s.id)) : 0;
+                setStudents(prev => {
+                    let newStudents = [...prev];
+                    let maxId = newStudents.length > 0 ? Math.max(...newStudents.map(s => s.id)) : 0;
 
-                rows.forEach((rowStr, rOffset) => {
-                    const cells = rowStr.split('\t');
-                    
-                    // 計算目標行
-                    let currentTargetIndex = startStudentIndex + rOffset;
-                    
-                    // 如果超過現有範圍，新增學生
-                    if (currentTargetIndex >= newStudents.length) {
-                        maxId++;
-                        // 預設班級為目前視圖的班級 (若有)
-                        const defaultClass = currentClassView !== "All" ? currentClassView : "";
-                        newStudents.push({
-                            id: maxId,
-                            className: defaultClass,
-                            number: "",
-                            name: "",
-                            grades: Array(20).fill("")
-                        });
-                    }
-
-                    const student = newStudents[currentTargetIndex];
-                    
-                    cells.forEach((cellData, cOffset) => {
-                        let currentVal = cellData.trim();
-                        
-                        // 計算欄位位置 (0:Class, 1:Num, 2:Name, 3+:Grades)
-                        let absoluteStartCol = (startColType === 'meta') ? startColIndex : (3 + startColIndex);
-                        const currentAbsoluteCol = absoluteStartCol + cOffset;
-
-                        if (currentAbsoluteCol === 0) student.className = currentVal;
-                        else if (currentAbsoluteCol === 1) student.number = currentVal;
-                        else if (currentAbsoluteCol === 2) student.name = currentVal;
-                        else if (currentAbsoluteCol >= 3 && currentAbsoluteCol < 23) {
-                            const gradeIdx = currentAbsoluteCol - 3;
-                            let numVal = currentVal === "" ? "" : parseFloat(currentVal);
-                            if (numVal !== "" && !isNaN(numVal)) {
-                                if (numVal < 0) numVal = 0;
-                                if (numVal > 100) numVal = 100;
-                                student.grades[gradeIdx] = numVal;
-                            } else {
-                                student.grades[gradeIdx] = "";
-                            }
+                    rows.forEach((rowStr, rOffset) => {
+                        const cells = rowStr.split('\t');
+                        let currentTargetIndex = startStudentIndex + rOffset;
+                        if (currentTargetIndex >= newStudents.length) {
+                            maxId++;
+                            const defaultClass = currentClassView !== "All" ? currentClassView : "";
+                            // Create with current headers length
+                            newStudents.push({ id: maxId, className: defaultClass, number: "", name: "", grades: Array(headers.length).fill("") });
                         }
-                    });
-                });
+                        const student = { ...newStudents[currentTargetIndex], grades: [...newStudents[currentTargetIndex].grades] }; 
+                        
+                        // Resize grades if needed (though addHeader handles resizing, safety check)
+                        while(student.grades.length < headers.length) student.grades.push("");
 
-                setStudents(newStudents);
+                        cells.forEach((cellData, cOffset) => {
+                            let currentVal = cellData.trim();
+                            let absoluteStartCol = (startColType === 'meta') ? startColIndex : (3 + startColIndex);
+                            const currentAbsoluteCol = absoluteStartCol + cOffset;
+                            if (currentAbsoluteCol === 0) student.className = currentVal;
+                            else if (currentAbsoluteCol === 1) student.number = currentVal;
+                            else if (currentAbsoluteCol === 2) student.name = currentVal;
+                            else if (currentAbsoluteCol >= 3) {
+                                const gradeIdx = currentAbsoluteCol - 3;
+                                // Ignore if grade index exceeds current headers (or we could auto-expand, but sticking to existing headers for simplicity in paste)
+                                if (gradeIdx < headers.length) {
+                                    let numVal = (currentVal === "" || isNaN(parseFloat(currentVal))) ? "" : parseFloat(currentVal);
+                                    if (numVal !== "") { if (numVal < 0) numVal = 0; if (numVal > 100) numVal = 100; student.grades[gradeIdx] = numVal; }
+                                }
+                            }
+                        });
+                        newStudents[currentTargetIndex] = student;
+                    });
+                    return newStudents;
+                });
             };
 
+            const triggerFileUpload = () => fileInputRef.current.click();
+            const handleFileImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const data = evt.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1 });
+                        if (jsonData.length < 2) { alert("Excel 異常：內容似乎為空"); return; }
+                        
+                        const fileHeaders = jsonData[0];
+                        const gradeColMapping = [];
+                        let classIdx = -1, numIdx = -1, nameIdx = -1;
+                        
+                        // Dynamic headers logic
+                        const detectedHeaders = [];
 
-            // 匯出 Excel
+                        fileHeaders.forEach((h, colIdx) => {
+                            const ht = String(h).trim();
+                            if (ht === "班級") classIdx = colIdx;
+                            else if (ht === "座號") numIdx = colIdx;
+                            else if (ht === "姓名") nameIdx = colIdx;
+                            else {
+                                // Treat everything else as a grade header
+                                gradeColMapping.push({ colIdx, headerText: ht });
+                                detectedHeaders.push(ht);
+                            }
+                        });
+                        
+                        // If no headers found (weird file), default to empty list or prompt?
+                        // Assuming valid import has headers
+                        
+                        const newStudents = [];
+                        let currentId = 1;
+                        for (let i = 1; i < jsonData.length; i++) {
+                            const row = jsonData[i];
+                            if (!row || row.length === 0) continue;
+                            const student = {
+                                id: currentId++,
+                                className: classIdx !== -1 ? String(row[classIdx] || "").trim() : "",
+                                number: numIdx !== -1 ? String(row[numIdx] || "").trim() : "",
+                                name: nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "",
+                                grades: Array(detectedHeaders.length).fill("")
+                            };
+                            gradeColMapping.forEach((map, gradeIdx) => {
+                                const val = row[map.colIdx];
+                                let numVal = (val === undefined || val === null || val === "") ? "" : parseFloat(val);
+                                if (numVal !== "" && !isNaN(numVal)) { if (numVal < 0) numVal = 0; if (numVal > 100) numVal = 100; student.grades[gradeIdx] = numVal; }
+                            });
+                            newStudents.push(student);
+                        }
+                        if (confirm(`準備匯入 ${newStudents.length} 筆資料。\n這將會覆蓋目前的資料並重設項目欄位，確定嗎？`)) {
+                            setHeaders(detectedHeaders);
+                            setStudents(newStudents);
+                            setCustomClasses([]);
+                            setCurrentClassView("All");
+                            // Reset stat selection
+                            setSelectedStatItem(0);
+                            alert("匯入成功！");
+                        }
+                    } catch (err) { console.error(err); alert("讀取失敗，請確認檔案格式是否正確。"); }
+                    fileInputRef.current.value = "";
+                };
+                reader.readAsBinaryString(file);
+            };
+
             const exportExcel = () => {
-                if (students.length === 0) {
-                    alert("沒有資料可以匯出");
-                    return;
-                }
-
+                if (students.length === 0) { alert("無資料可匯出"); return; }
                 const wb = XLSX.utils.book_new();
                 const classes = [...new Set(students.map(s => s.className || "未分類"))].sort();
-
                 classes.forEach(cls => {
-                    const classStudents = students.filter(s => (s.className || "未分類") === cls);
-                    const wsData = classStudents.map(s => {
-                        let row = {
-                            "班級": s.className,
-                            "座號": s.number,
-                            "姓名": s.name
-                        };
-                        headers.forEach((h, idx) => {
-                            row[h] = s.grades[idx];
-                        });
+                    const wsData = students.filter(s => (s.className || "未分類") === cls).map(s => {
+                        let row = { "班級": s.className, "座號": s.number, "姓名": s.name };
+                        headers.forEach((h, idx) => { row[h] = s.grades[idx]; });
                         return row;
                     });
-
                     const ws = XLSX.utils.json_to_sheet(wsData);
-                    const wscols = [
-                        {wch: 10}, {wch: 8}, {wch: 15},
-                    ];
-                    headers.forEach(() => wscols.push({wch: 10}));
-                    ws['!cols'] = wscols;
-
-                    const sheetName = cls.replace(/[\\/?*\[\]]/g, "_").substring(0, 31);
-                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                    ws['!cols'] = [{wch: 10}, {wch: 8}, {wch: 15}, ...headers.map(() => ({wch: 10}))];
+                    XLSX.utils.book_append_sheet(wb, ws, cls.replace(/[\\/?*\[\]]/g, "_").substring(0, 31));
                 });
-
                 XLSX.writeFile(wb, `成績總表_${new Date().toISOString().slice(0,10)}.xlsx`);
             };
 
-            // --- 統計邏輯 ---
             const statsData = useMemo(() => {
-                const currentHeaderName = headers[selectedStatItem];
+                // Safety check for index out of bounds if headers deleted
+                const safeIndex = selectedStatItem < headers.length ? selectedStatItem : 0;
+                const currentHeaderName = headers[safeIndex] || "未知";
                 
-                // 統計分析時，是否只統計目前分頁？ 通常統計是看該分頁 (班級) 的狀況
-                // 如果是 All，則統計所有
                 const targetStudents = displayedStudents;
-
-                const validGrades = targetStudents
-                    .map(s => s.grades[selectedStatItem])
-                    .filter(g => g !== "" && g !== null && g !== undefined);
-                
+                const validGrades = targetStudents.map(s => s.grades[safeIndex]).filter(g => g !== "" && g !== null && g !== undefined);
                 const total = validGrades.length;
                 const avg = total > 0 ? (validGrades.reduce((a, b) => a + b, 0) / total).toFixed(1) : 0;
-
                 const distribution = RANGES.map(range => {
                     const count = validGrades.filter(g => range.check(g)).length;
                     const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
                     return { ...range, count, percentage };
                 });
-
                 return { total, avg, distribution, currentHeaderName, isFiltered: currentClassView !== "All" };
             }, [displayedStudents, selectedStatItem, headers, currentClassView]);
 
+            if (isLoading) return <div className="loading-overlay"><div className="spinner"></div><div className="font-bold">資料讀取中...</div></div>;
+
             return (
                 <div className="min-h-screen p-4 md:p-8 max-w-[1920px] mx-auto">
-                    
-                    {/* Header Section */}
-                    <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <input type="file" accept=".xlsx, .xls" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileImport} />
+
+                    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 mb-6 border border-white/50 relative overflow-hidden">
+                        {/* Header Background Decoration */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+
+                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-800">
-                                    <i className="fa-solid fa-graduation-cap text-blue-600 mr-2"></i>
+                                <h1 className="text-3xl font-black text-gray-800 flex items-center tracking-tight">
+                                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-rose-500 mr-2">
+                                        <i className="fa-solid fa-graduation-cap"></i>
+                                    </span>
                                     班級成績管理系統
                                 </h1>
-                                <p className="text-gray-500 text-sm mt-1">
-                                    支援 Excel 貼上 (表頭與內容)、缺交黃底提示、多班級分頁管理
+                                <p className="text-gray-500 font-medium mt-2 flex items-center gap-4 text-sm">
+                                    <span className="flex items-center"><i className="fa-solid fa-cloud-arrow-up text-green-500 mr-1.5"></i>自動儲存</span>
+                                    <span className="flex items-center"><i className="fa-solid fa-file-excel text-green-600 mr-1.5"></i>Excel 整合</span>
+                                    <span className="flex items-center"><i className="fa-solid fa-trophy text-yellow-500 mr-1.5"></i>班級排名</span>
                                 </p>
                             </div>
-                            <div className="flex gap-3">
-                                <button 
-                                    onClick={() => setActiveTab('input')}
-                                    className={`px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'input' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                >
-                                    <i className="fa-solid fa-table mr-2"></i>成績輸入
+                            <div className="flex gap-3 flex-wrap justify-center">
+                                <button onClick={() => setActiveTab('input')} className={`px-6 py-2.5 rounded-full font-bold transition-all duration-300 shadow-sm flex items-center ${activeTab === 'input' ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white shadow-orange-200 shadow-lg scale-105' : 'bg-white text-gray-600 hover:bg-orange-50 border border-orange-100'}`}>
+                                    <i className="fa-solid fa-pen-to-square mr-2"></i>成績輸入
                                 </button>
-                                <button 
-                                    onClick={() => setActiveTab('stats')}
-                                    className={`px-4 py-2 rounded-md font-medium transition-colors ${activeTab === 'stats' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                >
+                                <button onClick={() => setActiveTab('stats')} className={`px-6 py-2.5 rounded-full font-bold transition-all duration-300 shadow-sm flex items-center ${activeTab === 'stats' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-purple-200 shadow-lg scale-105' : 'bg-white text-gray-600 hover:bg-purple-50 border border-purple-100'}`}>
                                     <i className="fa-solid fa-chart-pie mr-2"></i>統計分析
                                 </button>
-                                <button 
-                                    onClick={exportExcel}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-md font-medium hover:bg-green-700 transition-colors shadow-sm"
-                                >
-                                    <i className="fa-solid fa-file-excel mr-2"></i>匯出 Excel
+                                <div className="w-px h-10 bg-gray-200 mx-2 hidden md:block"></div>
+                                <button onClick={copyHeadersToClipboard} className="px-4 py-2 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm" title="複製項目名稱到剪貼簿 (Excel用)">
+                                    <i className="fa-regular fa-copy mr-2"></i>複製項目
+                                </button>
+                                <button onClick={triggerFileUpload} className="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm">
+                                    <i className="fa-solid fa-file-import mr-2"></i>匯入
+                                </button>
+                                <button onClick={exportExcel} className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm">
+                                    <i className="fa-solid fa-download mr-2"></i>匯出
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden min-h-[600px] flex flex-col">
-                        
-                        {/* Tab: Data Entry */}
+                    <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl border border-white overflow-hidden min-h-[600px] flex flex-col relative z-10">
                         {activeTab === 'input' && (
                             <div className="flex flex-col h-full">
-                                
-                                {/* 班級分頁列 */}
-                                <div className="px-4 pt-4 border-b bg-gray-50 overflow-x-auto">
+                                <div className="px-4 pt-4 border-b border-orange-100 bg-orange-50/50 overflow-x-auto custom-scrollbar">
                                     <div className="flex gap-2 pb-0">
-                                        <button
-                                            onClick={() => setCurrentClassView("All")}
-                                            className={`px-4 py-2 rounded-t-lg font-medium text-sm border-t border-l border-r transition-all ${currentClassView === "All" ? 'tab-active' : 'tab-inactive border-b-transparent'}`}
-                                        >
-                                            全部學生
-                                        </button>
+                                        <button onClick={() => setCurrentClassView("All")} className={`px-5 py-2.5 rounded-t-xl font-bold text-sm border-t border-l border-r transition-all duration-200 ${currentClassView === "All" ? 'tab-active' : 'tab-inactive border-b-transparent'}`}>全部學生</button>
                                         {availableClasses.map(cls => (
-                                            <button
-                                                key={cls}
-                                                onClick={() => setCurrentClassView(cls)}
-                                                className={`px-4 py-2 rounded-t-lg font-medium text-sm border-t border-l border-r transition-all ${currentClassView === cls ? 'tab-active' : 'tab-inactive border-b-transparent'}`}
-                                            >
-                                                {cls}班
-                                            </button>
+                                            <button key={cls} onClick={() => setCurrentClassView(cls)} className={`px-5 py-2.5 rounded-t-xl font-bold text-sm border-t border-l border-r transition-all duration-200 ${currentClassView === cls ? 'tab-active' : 'tab-inactive border-b-transparent'}`}>{cls}班</button>
                                         ))}
-                                        <button 
-                                            onClick={handleAddClassTab}
-                                            className="px-3 py-2 text-gray-500 hover:text-blue-600 font-medium text-sm flex items-center bg-gray-50 hover:bg-gray-100 border border-transparent hover:border-gray-200 rounded-lg transition-all"
-                                            title="新增班級分頁"
-                                        >
-                                            <i className="fa-solid fa-plus-circle text-lg mr-1"></i> 新增班級
+                                        <button onClick={handleAddClassTab} className="px-4 py-2 text-orange-600 hover:text-orange-800 font-bold text-sm flex items-center bg-transparent hover:bg-orange-100 rounded-lg transition-all ml-2">
+                                            <i className="fa-solid fa-plus mr-1.5"></i>新增
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="p-4 border-b bg-white flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <h2 className="font-semibold text-gray-700">
-                                            {currentClassView === "All" ? "所有學生名單" : `${currentClassView}班 - 成績錄入`} 
-                                            <span className="ml-2 text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                                                共 {displayedStudents.length} 人
-                                            </span>
-                                        </h2>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        
-                                        {/* 刪除班級按鈕 (僅在非 All 視圖顯示) */}
+                                <div className="p-4 border-b border-orange-100 bg-white flex justify-between items-center flex-wrap gap-4">
+                                    <h2 className="font-bold text-gray-800 text-lg flex items-center">
+                                        {currentClassView === "All" ? "所有學生名單" : `${currentClassView}班 成績表`} 
+                                        <span className="ml-3 text-xs font-bold text-orange-600 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
+                                            {displayedStudents.length} 人
+                                        </span>
+                                    </h2>
+                                    <div className="flex gap-2 flex-wrap items-center">
                                         {currentClassView !== "All" && (
-                                            <button 
-                                                onClick={handleDeleteClass} 
-                                                className="text-sm bg-red-50 text-red-600 px-3 py-1 rounded hover:bg-red-100 border border-red-200 font-medium shadow-sm transition-colors flex items-center mr-2"
-                                                title="刪除目前選取的班級"
-                                            >
-                                                <i className="fa-solid fa-trash-can mr-1"></i>
-                                                刪除班級
-                                            </button>
+                                            <>
+                                                <button onClick={handleRenameClass} className="text-sm bg-gray-50 text-gray-600 px-4 py-1.5 rounded-lg hover:bg-gray-100 border border-gray-200 font-bold transition-all"><i className="fa-solid fa-pen mr-1.5"></i>更名</button>
+                                                <button onClick={handleDeleteClass} className="text-sm bg-rose-50 text-rose-600 px-4 py-1.5 rounded-lg hover:bg-rose-100 border border-rose-200 font-bold mr-2 transition-all"><i className="fa-solid fa-trash mr-1.5"></i>刪除</button>
+                                            </>
                                         )}
-
-                                        <div className="text-xs text-gray-500 flex items-center gap-2 mr-4 bg-yellow-50 px-2 py-1 rounded border border-yellow-200 hidden md:flex">
-                                            <i className="fa-regular fa-lightbulb text-yellow-600"></i>
-                                            提示：項目名稱與內容均支援 Ctrl+V 貼上
+                                        <div className="hidden lg:flex items-center gap-2 mr-2 px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg border border-yellow-200 text-xs font-medium">
+                                            <i className="fa-regular fa-lightbulb"></i>
+                                            提示：點選格子後按 Ctrl+V 可貼上
                                         </div>
-                                        <button onClick={addStudent} className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 border border-blue-200 font-medium shadow-sm">
-                                            <i className="fa-solid fa-plus mr-1"></i>
+                                        <button onClick={addStudent} className="text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-bold shadow-md hover:shadow-lg transition-all transform active:scale-95">
+                                            <i className="fa-solid fa-user-plus mr-1.5"></i>
                                             {currentClassView === "All" ? "新增學生" : `新增 ${currentClassView}班 學生`}
                                         </button>
                                     </div>
                                 </div>
                                 
-                                <div className="flex-1 table-container overflow-auto relative">
+                                <div className="flex-1 table-container overflow-auto relative bg-orange-50/20">
                                     <table className="w-full text-sm text-left border-collapse">
-                                        <thead className="bg-gray-100 text-gray-700 font-bold sticky top-0 z-10 shadow-sm">
+                                        <thead className="bg-orange-100 text-orange-900 font-bold sticky top-0 z-10 shadow-sm">
                                             <tr>
-                                                <th className="p-3 border-b border-r min-w-[60px] text-center sticky left-0 bg-gray-100 z-20">操作</th>
-                                                <th className="p-3 border-b border-r min-w-[80px] sticky left-[60px] bg-gray-100 z-20">班級</th>
-                                                <th className="p-3 border-b border-r min-w-[60px] sticky left-[140px] bg-gray-100 z-20">號碼</th>
-                                                <th className="p-3 border-b border-r min-w-[120px] sticky left-[200px] bg-gray-100 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">姓名</th>
-                                                
+                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[60px] text-center sticky left-0 bg-orange-100 z-20">刪除</th>
+                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[80px] sticky left-[60px] bg-orange-100 z-20">班級</th>
+                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[60px] sticky left-[140px] bg-orange-100 z-20">號碼</th>
+                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[120px] sticky left-[200px] bg-orange-100 z-20 shadow-[4px_0_10px_-4px_rgba(249,115,22,0.1)]">姓名</th>
                                                 {headers.map((h, idx) => (
-                                                    <th key={idx} className="p-2 border-b border-r min-w-[90px] text-center group relative">
-                                                        {editingHeader === idx ? (
-                                                            <input 
-                                                                autoFocus
-                                                                type="text" 
-                                                                className="w-full text-center border-blue-500 border rounded outline-none p-1"
-                                                                value={h}
-                                                                onChange={(e) => updateHeader(idx, e.target.value)}
-                                                                onPaste={(e) => handleHeaderPaste(e, idx)}
-                                                                onBlur={() => setEditingHeader(null)}
-                                                                onKeyDown={(e) => e.key === 'Enter' && setEditingHeader(null)}
-                                                            />
-                                                        ) : (
-                                                            <div className="flex items-center justify-center gap-1 cursor-pointer hover:text-blue-600" onClick={() => setEditingHeader(idx)}>
-                                                                <span>{h}</span>
-                                                                <i className="fa-solid fa-pen text-[10px] opacity-0 group-hover:opacity-50"></i>
+                                                    <th key={idx} className="p-2 border-b border-orange-200 border-r border-orange-200 min-w-[90px] text-center group relative hover:bg-orange-200 transition-colors">
+                                                        <div className="flex flex-col items-center justify-between h-full">
+                                                            {/* Delete Button (visible on hover) */}
+                                                            <div className="w-full flex justify-end mb-1">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); removeHeader(idx); }} 
+                                                                    className="delete-col-btn text-rose-400 hover:text-rose-600 text-xs px-1 rounded hover:bg-rose-100 transition-colors"
+                                                                    title="刪除此項目"
+                                                                >
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
                                                             </div>
-                                                        )}
+                                                            {editingHeader === idx ? (
+                                                                <input autoFocus type="text" className="w-full text-center border-2 border-orange-400 rounded p-1 bg-white shadow-inner" value={h} onChange={(e) => updateHeader(idx, e.target.value)} onPaste={(e) => handleHeaderPaste(e, idx)} onBlur={() => setEditingHeader(null)} onKeyDown={(e) => e.key === 'Enter' && setEditingHeader(null)} />
+                                                            ) : (
+                                                                <div className="flex items-center justify-center gap-1 cursor-pointer w-full" onClick={() => setEditingHeader(idx)}>
+                                                                    <span>{h}</span><i className="fa-solid fa-pencil text-[10px] opacity-0 group-hover:opacity-40 ml-1"></i>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </th>
                                                 ))}
+                                                {/* Add Header Button */}
+                                                <th className="p-2 border-b border-orange-200 border-r border-orange-200 min-w-[50px] text-center bg-orange-50 hover:bg-orange-200 cursor-pointer transition-colors" onClick={addHeader} title="新增項目">
+                                                    <i className="fa-solid fa-plus text-orange-500 text-lg"></i>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {displayedStudents.map((student, sIdx) => (
-                                                <tr key={student.id} className="hover:bg-blue-50 transition-colors border-b">
-                                                    <td className="p-2 border-r text-center sticky left-0 bg-white z-10">
-                                                        <button 
-                                                            onClick={() => removeStudent(student.id)}
-                                                            className="text-red-400 hover:text-red-600 w-6 h-6 rounded-full hover:bg-red-50"
-                                                        >
-                                                            <i className="fa-solid fa-trash-can"></i>
-                                                        </button>
+                                            {displayedStudents.map((student) => (
+                                                <tr key={student.id} className="group hover:bg-orange-50 transition-colors border-b border-orange-100">
+                                                    <td className="p-2 border-r border-orange-100 text-center sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                                                        <button onClick={() => removeStudent(student.id)} className="text-gray-300 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 transition-all"><i className="fa-solid fa-xmark text-lg"></i></button>
                                                     </td>
-                                                    <td className="p-1 border-r sticky left-[60px] bg-white z-10">
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 rounded text-center"
-                                                            value={student.className}
-                                                            onChange={(e) => updateStudentInfo(student.id, 'className', e.target.value)}
-                                                            onPaste={(e) => handlePaste(e, student.id, 'meta', 0)}
-                                                            placeholder="班級"
-                                                        />
-                                                    </td>
-                                                    <td className="p-1 border-r sticky left-[140px] bg-white z-10">
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 rounded text-center"
-                                                            value={student.number}
-                                                            onChange={(e) => updateStudentInfo(student.id, 'number', e.target.value)}
-                                                            onPaste={(e) => handlePaste(e, student.id, 'meta', 1)}
-                                                            placeholder="號"
-                                                        />
-                                                    </td>
-                                                    <td className="p-1 border-r sticky left-[200px] bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-blue-100 rounded"
-                                                            value={student.name}
-                                                            onChange={(e) => updateStudentInfo(student.id, 'name', e.target.value)}
-                                                            onPaste={(e) => handlePaste(e, student.id, 'meta', 2)}
-                                                            placeholder="姓名"
-                                                        />
-                                                    </td>
+                                                    <td className="p-1 border-r border-orange-100 sticky left-[60px] bg-white group-hover:bg-orange-50 z-10 transition-colors"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded text-center font-medium text-gray-700" value={student.className} onChange={(e) => updateStudentInfo(student.id, 'className', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 0)} /></td>
+                                                    <td className="p-1 border-r border-orange-100 sticky left-[140px] bg-white group-hover:bg-orange-50 z-10 transition-colors"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded text-center font-medium text-gray-700" value={student.number} onChange={(e) => updateStudentInfo(student.id, 'number', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 1)} /></td>
+                                                    <td className="p-1 border-r border-orange-100 sticky left-[200px] bg-white group-hover:bg-orange-50 z-10 transition-colors shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded font-bold text-gray-800" value={student.name} onChange={(e) => updateStudentInfo(student.id, 'name', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 2)} /></td>
                                                     {student.grades.map((g, idx) => (
-                                                        <td key={idx} className="p-1 border-r text-center">
-                                                            <input 
-                                                                type="number" 
-                                                                className={`w-full p-2 text-center outline-none rounded focus:ring-2 focus:ring-blue-200 transition-colors
-                                                                    ${(g === "" || g === null) ? 'empty-grade' : ''}
-                                                                    ${g !== "" && g < 60 ? 'text-red-600 font-bold' : ''}
-                                                                    ${g === 100 ? 'text-green-600 font-bold' : ''}
-                                                                `}
-                                                                value={g}
-                                                                onChange={(e) => updateGrade(student.id, idx, e.target.value)}
-                                                                onPaste={(e) => handlePaste(e, student.id, 'grade', idx)}
-                                                                placeholder=""
-                                                            />
+                                                        <td key={idx} className="p-1 border-r border-orange-100 text-center">
+                                                            <input type="number" className={`w-full p-2 text-center outline-none rounded focus:ring-2 focus:ring-orange-300 transition-all font-mono text-base ${(g === "" || g === null) ? 'empty-grade' : ''} ${g !== "" && g < 60 ? 'text-rose-600 font-bold bg-rose-50' : ''} ${g === 100 ? 'text-emerald-600 font-bold bg-emerald-50' : ''}`} value={g} onChange={(e) => updateGrade(student.id, idx, e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'grade', idx)} />
                                                         </td>
                                                     ))}
+                                                    {/* Empty cell for add button alignment */}
+                                                    <td className="p-1 border-r border-orange-100 bg-gray-50/50"></td>
                                                 </tr>
                                             ))}
                                             {displayedStudents.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={24} className="p-12 text-center text-gray-400">
-                                                        <div className="flex flex-col items-center gap-2">
-                                                            <i className="fa-regular fa-folder-open text-4xl mb-2"></i>
-                                                            <p>此班級尚無學生資料</p>
-                                                            <button onClick={addStudent} className="text-blue-600 hover:underline">
-                                                                立即新增一位學生
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                <tr><td colSpan={headers.length + 5}><EmptyState message="此班級尚無學生資料，快來新增第一位學生吧！" action={addStudent} actionText="新增學生" /></td></tr>
                                             )}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="p-2 bg-gray-50 text-xs text-gray-500 border-t flex justify-between">
-                                    <div className="flex gap-4">
-                                        <span className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-100 border border-gray-300"></div> 缺交/空白</span>
-                                        <span className="flex items-center gap-1 text-red-600 font-bold">60分以下</span>
-                                    </div>
-                                    <span>共 {students.length} 筆資料 (本頁 {displayedStudents.length} 筆)</span>
-                                </div>
                             </div>
                         )}
 
-                        {/* Tab: Statistics */}
                         {activeTab === 'stats' && (
-                            <div className="p-6 md:p-8 flex flex-col items-center">
-                                <div className="w-full max-w-4xl">
-                                    
-                                    {/* Control Bar - New! */}
-                                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
-                                        
-                                        <div className="flex items-center gap-2 w-full md:w-auto">
-                                            <label className="font-bold text-gray-700 whitespace-nowrap"><i className="fa-solid fa-users-viewfinder text-purple-600 mr-2"></i>分析對象：</label>
-                                            <select 
-                                                className="border border-gray-300 rounded-md p-2 w-full md:w-[220px] shadow-sm focus:ring-2 focus:ring-purple-200 outline-none bg-gray-50"
-                                                value={currentClassView}
-                                                onChange={(e) => setCurrentClassView(e.target.value)}
-                                            >
-                                                <option value="All">全部年級 / 所有班級</option>
-                                                {availableClasses.map(cls => (
-                                                    <option key={cls} value={cls}>{cls}班</option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 w-full md:w-auto">
-                                            <label className="font-bold text-gray-700 whitespace-nowrap"><i className="fa-solid fa-list-check text-blue-600 mr-2"></i>成績項目：</label>
-                                            <select 
-                                                className="border border-gray-300 rounded-md p-2 w-full md:w-[220px] shadow-sm focus:ring-2 focus:ring-blue-200 outline-none bg-gray-50"
-                                                value={selectedStatItem}
-                                                onChange={(e) => setSelectedStatItem(parseInt(e.target.value))}
-                                            >
-                                                {headers.map((h, idx) => (
-                                                    <option key={idx} value={idx}>{h}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                            <div className="p-6 md:p-8 bg-gradient-to-br from-white to-orange-50/50 min-h-full">
+                                {/* Control Panel */}
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 mb-8 flex flex-col md:flex-row gap-6 items-center justify-between">
+                                    <div className="flex items-center gap-3 bg-orange-50 px-4 py-2 rounded-xl">
+                                        <div className="bg-rose-500 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md"><i className="fa-solid fa-users"></i></div>
+                                        <label className="font-bold text-gray-700 text-sm">對象：</label>
+                                        <select className="bg-transparent font-bold text-gray-800 outline-none cursor-pointer w-[180px]" value={currentClassView} onChange={(e) => setCurrentClassView(e.target.value)}>
+                                            <option value="All">全部年級 / 所有班級</option>
+                                            {availableClasses.map(cls => (<option key={cls} value={cls}>{cls}班</option>))}
+                                        </select>
                                     </div>
+                                    <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-xl">
+                                        <div className="bg-blue-500 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md"><i className="fa-solid fa-list-check"></i></div>
+                                        <label className="font-bold text-gray-700 text-sm">項目：</label>
+                                        <select className="bg-transparent font-bold text-gray-800 outline-none cursor-pointer w-[180px]" value={selectedStatItem} onChange={(e) => setSelectedStatItem(parseInt(e.target.value))}>
+                                            {headers.map((h, idx) => (<option key={idx} value={idx}>{h}</option>))}
+                                        </select>
+                                    </div>
+                                </div>
 
-                                    <div className="grid md:grid-cols-2 gap-8">
-                                        {/* Stats Summary Card */}
-                                        <div className="bg-white p-6 rounded-xl shadow-lg border border-purple-100">
-                                            <h3 className="text-xl font-bold text-gray-800 mb-4 pb-2 border-b flex justify-between items-center">
-                                                <span>{statsData.currentHeaderName} - 概況</span>
-                                                {currentClassView !== "All" && (
-                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{currentClassView}班</span>
-                                                )}
-                                                {currentClassView === "All" && (
-                                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">全校統計</span>
-                                                )}
-                                            </h3>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-purple-50 p-4 rounded-lg text-center">
-                                                    <div className="text-sm text-gray-500">有效成績人數</div>
-                                                    <div className="text-3xl font-bold text-purple-700">{statsData.total}</div>
-                                                </div>
-                                                <div className="bg-blue-50 p-4 rounded-lg text-center">
-                                                    <div className="text-sm text-gray-500">平均分數</div>
-                                                    <div className="text-3xl font-bold text-blue-700">{statsData.avg}</div>
-                                                </div>
+                                <div className="grid md:grid-cols-2 gap-8 mb-8">
+                                    {/* Stats Card */}
+                                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-purple-100 relative overflow-hidden group hover:shadow-xl transition-all">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50 group-hover:scale-110 transition-transform"></div>
+                                        <h3 className="text-xl font-black text-gray-800 mb-6 flex justify-between items-center relative z-10">
+                                            <span><i className="fa-solid fa-chart-simple text-purple-500 mr-3"></i>成績概況</span>
+                                            <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">{currentClassView === "All" ? "全校" : `${currentClassView}班`}</span>
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-4 relative z-10">
+                                            <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5 rounded-2xl text-center border border-purple-100">
+                                                <div className="text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">有效人數</div>
+                                                <div className="text-4xl font-black text-purple-600">{statsData.total}</div>
+                                            </div>
+                                            <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-5 rounded-2xl text-center border border-orange-100">
+                                                <div className="text-xs font-bold text-orange-400 mb-2 uppercase tracking-wider">平均分數</div>
+                                                <div className="text-4xl font-black text-orange-600">{statsData.avg}</div>
                                             </div>
                                         </div>
-
-                                        {/* Distribution Table */}
-                                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                                            <table className="w-full text-sm">
-                                                <thead className="bg-gray-800 text-white">
-                                                    <tr>
-                                                        <th className="p-3 text-left">成績級距</th>
-                                                        <th className="p-3 text-right">人數</th>
-                                                        <th className="p-3 text-right">佔比</th>
-                                                        <th className="p-3">圖示</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {statsData.distribution.map((d, i) => (
-                                                        <tr key={i} className="border-b hover:bg-gray-50">
-                                                            <td className="p-3 font-medium text-gray-700">{d.label}</td>
-                                                            <td className="p-3 text-right font-mono text-base">{d.count}</td>
-                                                            <td className="p-3 text-right text-gray-500">{d.percentage}%</td>
-                                                            <td className="p-3 w-1/3">
-                                                                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                                                                    <div 
-                                                                        className={`h-2.5 rounded-full ${i === statsData.distribution.length - 1 ? 'bg-red-500' : 'bg-green-500'}`} 
-                                                                        style={{ width: `${d.percentage}%` }}
-                                                                    ></div>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
                                     </div>
+
+                                    {/* Distribution Table */}
+                                    <div className="bg-white rounded-2xl shadow-lg border border-orange-100 overflow-hidden hover:shadow-xl transition-all">
+                                        <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-gray-700 flex items-center">
+                                            <i className="fa-solid fa-layer-group text-orange-500 mr-2"></i> 分數分佈
+                                        </div>
+                                        <table className="w-full text-sm">
+                                            <tbody>
+                                                {statsData.distribution.map((d, i) => (
+                                                    <tr key={i} className="border-b border-orange-50 hover:bg-orange-50/50 transition-colors last:border-0">
+                                                        <td className="p-3 pl-5 font-bold text-gray-600">{d.label}</td>
+                                                        <td className="p-3 text-right font-mono font-bold text-gray-800">{d.count} <span className="text-xs text-gray-400 font-normal">人</span></td>
+                                                        <td className="p-3 text-right text-gray-500 w-16">{d.percentage}%</td>
+                                                        <td className="p-3 pr-5">
+                                                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden shadow-inner">
+                                                                <div className={`h-3 rounded-full ${i === statsData.distribution.length - 1 ? 'bg-rose-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`} style={{ width: `${d.percentage}%`, transition: 'width 1s ease-out' }}></div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Class Ranking Section */}
+                                <div className="bg-white p-8 rounded-2xl shadow-lg border border-amber-100 relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 via-orange-400 to-rose-400"></div>
+                                    <h3 className="text-2xl font-black text-gray-800 mb-8 flex items-center">
+                                        <i className="fa-solid fa-trophy text-amber-500 mr-3 text-3xl drop-shadow-sm"></i>
+                                        班級榮譽榜 <span className="text-sm font-normal text-gray-500 ml-3 mt-2">({statsData.currentHeaderName})</span>
+                                    </h3>
                                     
-                                    <div className="mt-8 p-4 bg-yellow-50 text-yellow-800 rounded-lg border border-yellow-200 text-sm">
-                                        <i className="fa-solid fa-circle-info mr-2"></i>
-                                        此統計基於目前所選的分析對象 ({currentClassView === 'All' ? '全部年級' : currentClassView + '班'})。若欄位空白，將不計入平均與人數統計。
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {classRankings.length === 0 && (
+                                            <div className="col-span-3">
+                                                <EmptyState message="還沒有足夠的資料來產生排名喔！" />
+                                            </div>
+                                        )}
+                                        
+                                        {classRankings.map((cls, idx) => (
+                                            <div key={cls.className} className={`rank-card p-5 rounded-2xl flex items-center justify-between relative ${idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'bg-white border border-gray-100 hover:border-gray-300'}`}>
+                                                
+                                                <div className="flex items-center gap-4 z-10">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-md transform rotate-3
+                                                        ${idx === 0 ? 'bg-yellow-400 text-white' : 
+                                                          idx === 1 ? 'bg-slate-400 text-white' : 
+                                                          idx === 2 ? 'bg-orange-400 text-white' : 
+                                                          'bg-gray-100 text-gray-400'}`}>
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-black text-gray-800 text-xl">{cls.className} <span className="text-sm font-normal text-gray-500">班</span></div>
+                                                        <div className="text-xs font-bold text-gray-400 bg-white/50 px-2 py-0.5 rounded-full inline-block mt-1">人數: {cls.count}</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="z-10 text-right">
+                                                    <div className="text-3xl font-black text-gray-700 tracking-tighter">{cls.avg}</div>
+                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">AVG</div>
+                                                </div>
+
+                                                {idx === 0 && (
+                                                    <>
+                                                        <div className="absolute -right-6 -top-6 text-8xl opacity-10 text-yellow-600"><i className="fa-solid fa-crown"></i></div>
+                                                        <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl crown-icon shadow-sm">NO.1 冠軍</div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
