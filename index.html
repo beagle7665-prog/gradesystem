@@ -85,13 +85,22 @@
             background-color: #ffffff;
             border: 2px solid #f97316;
             box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+            z-index: 10;
+        }
+
+        /* Focus state for text inputs to match the grid navigation feel */
+        input[type="text"]:focus {
+            background-color: #ffffff;
+            border: 2px solid #f97316;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+            z-index: 10;
         }
         
         .tab-active {
             background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
             color: white;
             border-color: transparent;
-            box-shadow: 0 2px 4px rgba(234, 88, 12, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.3);
             transform: translateY(-1px);
         }
         .tab-inactive {
@@ -195,20 +204,20 @@
         const STORAGE_KEY = "grade_system_v2_data"; 
 
         const RANGES = [
-            { label: "100分", check: (s) => s === 100 },
-            { label: "90-99分", check: (s) => s >= 90 && s < 100 },
-            { label: "80-89分", check: (s) => s >= 80 && s < 90 },
-            { label: "70-79分", check: (s) => s >= 70 && s < 80 },
-            { label: "60-69分", check: (s) => s >= 60 && s < 70 },
-            { label: "60分以下", check: (s) => s < 60 },
+            { label: "100分", check: (s) => s === 100, color: "bg-rose-500" },
+            { label: "90-99分", check: (s) => s >= 90 && s < 100, color: "bg-orange-500" },
+            { label: "80-89分", check: (s) => s >= 80 && s < 90, color: "bg-amber-400" },
+            { label: "70-79分", check: (s) => s >= 70 && s < 80, color: "bg-yellow-400" },
+            { label: "60-69分", check: (s) => s >= 60 && s < 70, color: "bg-lime-500" },
+            { label: "60分以下", check: (s) => s < 60, color: "bg-gray-400" },
         ];
 
         // Cute Empty State Component
         const EmptyState = ({ message, action, actionText }) => (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex flex-col items-center justify-center py-12 text-center w-full">
                 <div className="bg-orange-100 p-6 rounded-full mb-4 shadow-sm">
                     {/* Simple SVG Illustration */}
-                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M9 13H15M9 17H13M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21M3 7V5C3 3.89543 3.89543 3 5 3H9L11 5H19C20.1046 5 21 5.89543 21 7" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                 </div>
@@ -231,6 +240,10 @@
             const [editingHeader, setEditingHeader] = useState(null);
             const [currentClassView, setCurrentClassView] = useState("All");
             const [isLoading, setIsLoading] = useState(true);
+            
+            // Focus Management
+            const [pendingFocus, setPendingFocus] = useState(null); // { rowIndex, colIndex }
+
             const fileInputRef = useRef(null);
 
             useEffect(() => {
@@ -258,21 +271,44 @@
                 }
             }, [students, headers, customClasses, isLoading]);
 
+            // Auto-focus effect when pendingFocus changes
+            useEffect(() => {
+                if (pendingFocus) {
+                    const { rowIndex, colIndex } = pendingFocus;
+                    // Timeout to ensure DOM is ready after React render
+                    setTimeout(() => {
+                        const el = document.getElementById(`cell-${rowIndex}-${colIndex}`);
+                        if (el) {
+                            el.focus();
+                            // Optional: Select all content
+                            // el.select(); 
+                        }
+                    }, 0);
+                    setPendingFocus(null);
+                }
+            }, [pendingFocus, students]);
+
             const availableClasses = useMemo(() => {
                 const existingClasses = [...new Set(students.map(s => s.className || "未分類"))];
                 const all = [...new Set([...existingClasses, ...customClasses])];
-                return all.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                return all.filter(c => c).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             }, [students, customClasses]);
 
             const displayedStudents = useMemo(() => {
-                if (currentClassView === "All") return students;
-                return students.filter(s => (s.className || "未分類") === currentClassView);
+                let filtered = students;
+                if (currentClassView !== "All") {
+                    filtered = students.filter(s => (s.className || "未分類") === currentClassView);
+                }
+                return filtered.sort((a, b) => {
+                    const numA = parseInt(a.number) || 999;
+                    const numB = parseInt(b.number) || 999;
+                    return numA - numB;
+                });
             }, [students, currentClassView]);
 
             const classRankings = useMemo(() => {
                 const rankings = availableClasses.map(cls => {
                     const classStudents = students.filter(s => (s.className || "未分類") === cls);
-                    // Handle dynamic headers access safely
                     const gradeIndex = selectedStatItem;
                     if (gradeIndex >= headers.length) return { className: cls, avg: -1, count: 0 };
 
@@ -288,14 +324,92 @@
                 return rankings.filter(r => r.avg >= 0).sort((a, b) => b.avg - a.avg);
             }, [students, availableClasses, selectedStatItem, headers]);
 
-            const addStudent = () => {
+            const addStudent = (focusTargetRowIndex = null, focusTargetColIndex = null) => {
                 const newId = students.length > 0 ? Math.max(...students.map(s => s.id)) + 1 : 1;
                 let targetClass = "101";
                 if (currentClassView !== "All") targetClass = currentClassView;
                 else if (students.length > 0) targetClass = students[students.length - 1].className;
                 
-                // Initialize grades array with current header length
-                setStudents(prev => [...prev, { id: newId, className: targetClass, number: "", name: "", grades: Array(headers.length).fill("") }]);
+                const classStudents = students.filter(s => (s.className || "未分類") === targetClass);
+                let nextNum = "";
+                if (classStudents.length > 0) {
+                    const maxNum = Math.max(...classStudents.map(s => parseInt(s.number) || 0));
+                    if(maxNum > 0) nextNum = (maxNum + 1).toString().padStart(2, '0');
+                }
+
+                setStudents(prev => [...prev, { id: newId, className: targetClass, number: nextNum, name: "", grades: Array(headers.length).fill("") }]);
+
+                if (focusTargetRowIndex !== null && focusTargetColIndex !== null) {
+                    setPendingFocus({ rowIndex: focusTargetRowIndex, colIndex: focusTargetColIndex });
+                }
+            };
+
+            // --- KEYBOARD NAVIGATION LOGIC ---
+            const handleKeyDown = (e, rowIndex, colIndex) => {
+                const totalRows = displayedStudents.length;
+                // Col 0=Class, 1=Num, 2=Name, 3...=Grades
+                // Max col index is 2 + headers.length
+                const maxColIndex = 2 + headers.length; 
+
+                const moveFocus = (r, c) => {
+                    const targetId = `cell-${r}-${c}`;
+                    const el = document.getElementById(targetId);
+                    if (el) {
+                        el.focus();
+                        // Optional: auto-select text
+                        // setTimeout(() => el.select(), 0); 
+                    }
+                };
+
+                switch(e.key) {
+                    case 'Enter':
+                        e.preventDefault();
+                        if (rowIndex === totalRows - 1) {
+                            // Last row, add new student and focus same col in new row
+                            addStudent(rowIndex + 1, colIndex);
+                        } else {
+                            moveFocus(rowIndex + 1, colIndex);
+                        }
+                        break;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        if (rowIndex < totalRows - 1) {
+                            moveFocus(rowIndex + 1, colIndex);
+                        }
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        if (rowIndex > 0) {
+                            moveFocus(rowIndex - 1, colIndex);
+                        }
+                        break;
+                    case 'ArrowLeft':
+                        // Only move if cursor is at start or input is empty or it is a number input
+                        // e.target.type check ensures we don't block text selection
+                        const isText = e.target.type === 'text';
+                        const isStart = e.target.selectionStart === 0 && e.target.selectionEnd === 0;
+                        if (!isText || isStart) {
+                            if (colIndex > 0) {
+                                e.preventDefault();
+                                moveFocus(rowIndex, colIndex - 1);
+                            }
+                        }
+                        break;
+                    case 'ArrowRight':
+                        const valLen = e.target.value.toString().length;
+                        const isEnd = e.target.selectionStart === valLen;
+                        // Use !isText for number inputs which might not support selectionStart uniformly across browsers, 
+                        // but here we just check generally.
+                        if (e.target.selectionStart === null || isEnd) {
+                            if (colIndex < maxColIndex) {
+                                e.preventDefault();
+                                moveFocus(rowIndex, colIndex + 1);
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
             };
 
             const handleAddClassTab = () => {
@@ -324,7 +438,6 @@
                         ...s,
                         grades: s.grades.filter((_, i) => i !== index)
                     })));
-                    // Adjust selected stat item if needed
                     if (selectedStatItem >= index && selectedStatItem > 0) {
                         setSelectedStatItem(prev => prev - 1);
                     }
@@ -380,7 +493,7 @@
             const handleDeleteClass = () => {
                 if (currentClassView === "All") return;
                 const count = students.filter(s => (s.className || "未分類") === currentClassView).length;
-                if (window.confirm(count > 0 ? `確定刪除「${currentClassView}班」？將刪除 ${count} 筆資料！` : `確定刪除「${currentClassView}班」分頁？`)) {
+                if (window.confirm(count > 0 ? `確定刪除「${currentClassView}」？將刪除 ${count} 筆學生資料！` : `確定刪除「${currentClassView}」分頁？`)) {
                     setStudents(prev => prev.filter(s => (s.className || "未分類") !== currentClassView));
                     setCustomClasses(prev => prev.filter(c => c !== currentClassView));
                     setCurrentClassView("All");
@@ -401,7 +514,6 @@
                 setStudents(prev => prev.map(s => {
                     if (s.id === id) {
                         const newGrades = [...s.grades];
-                        // Ensure array is large enough
                         while (newGrades.length <= index) newGrades.push("");
                         newGrades[index] = numVal;
                         return { ...s, grades: newGrades };
@@ -422,18 +534,13 @@
                 if (!clipboardData) return;
                 const values = clipboardData.split(/\t|\n/).map(v => v.trim()).filter(v => v !== "");
                 
-                // Add columns if paste exceeds current headers
                 if (startIndex + values.length > headers.length) {
                     const columnsToAdd = (startIndex + values.length) - headers.length;
                     const additionalHeaders = Array(columnsToAdd).fill("").map((_, i) => `項目${headers.length + i + 1}`);
-                    
-                    // Update headers first
                     const updatedHeaders = [...headers, ...additionalHeaders];
                     const next = [...updatedHeaders];
                     values.forEach((val, i) => { next[startIndex + i] = val; });
                     setHeaders(next);
-
-                    // Update students to match new length
                     setStudents(prev => prev.map(s => ({
                          ...s,
                          grades: [...s.grades, ...Array(columnsToAdd).fill("")]
@@ -466,13 +573,11 @@
                         let currentTargetIndex = startStudentIndex + rOffset;
                         if (currentTargetIndex >= newStudents.length) {
                             maxId++;
-                            const defaultClass = currentClassView !== "All" ? currentClassView : "";
-                            // Create with current headers length
+                            const defaultClass = currentClassView !== "All" ? currentClassView : (newStudents.length > 0 ? newStudents[newStudents.length -1].className : "101");
                             newStudents.push({ id: maxId, className: defaultClass, number: "", name: "", grades: Array(headers.length).fill("") });
                         }
                         const student = { ...newStudents[currentTargetIndex], grades: [...newStudents[currentTargetIndex].grades] }; 
                         
-                        // Resize grades if needed (though addHeader handles resizing, safety check)
                         while(student.grades.length < headers.length) student.grades.push("");
 
                         cells.forEach((cellData, cOffset) => {
@@ -484,7 +589,6 @@
                             else if (currentAbsoluteCol === 2) student.name = currentVal;
                             else if (currentAbsoluteCol >= 3) {
                                 const gradeIdx = currentAbsoluteCol - 3;
-                                // Ignore if grade index exceeds current headers (or we could auto-expand, but sticking to existing headers for simplicity in paste)
                                 if (gradeIdx < headers.length) {
                                     let numVal = (currentVal === "" || isNaN(parseFloat(currentVal))) ? "" : parseFloat(currentVal);
                                     if (numVal !== "") { if (numVal < 0) numVal = 0; if (numVal > 100) numVal = 100; student.grades[gradeIdx] = numVal; }
@@ -506,61 +610,107 @@
                     try {
                         const data = evt.target.result;
                         const workbook = XLSX.read(data, { type: 'binary' });
-                        const firstSheetName = workbook.SheetNames[0];
-                        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1 });
-                        if (jsonData.length < 2) { alert("Excel 異常：內容似乎為空"); return; }
                         
-                        const fileHeaders = jsonData[0];
-                        const gradeColMapping = [];
-                        let classIdx = -1, numIdx = -1, nameIdx = -1;
-                        
-                        // Dynamic headers logic
-                        const detectedHeaders = [];
+                        let allNewStudents = [];
+                        let globalHeadersSet = new Set(); // 用來收集所有分頁出現過的成績欄位名稱
+                        let currentId = 1;
 
-                        fileHeaders.forEach((h, colIdx) => {
-                            const ht = String(h).trim();
-                            if (ht === "班級") classIdx = colIdx;
-                            else if (ht === "座號") numIdx = colIdx;
-                            else if (ht === "姓名") nameIdx = colIdx;
-                            else {
-                                // Treat everything else as a grade header
-                                gradeColMapping.push({ colIdx, headerText: ht });
-                                detectedHeaders.push(ht);
+                        // 遍歷所有工作表 (Sheet)
+                        workbook.SheetNames.forEach(sheetName => {
+                            const sheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                            if (jsonData.length < 2) return; // 跳過空的工作表或是只有標題的
+
+                            const fileHeaders = jsonData[0];
+                            let classIdx = -1, numIdx = -1, nameIdx = -1;
+                            const sheetGradeMap = []; // 用來記錄這個 Sheet 的成績欄位對應: [{ colIdx, headerText }]
+
+                            // 解析這個 Sheet 的表頭
+                            fileHeaders.forEach((h, colIdx) => {
+                                const ht = String(h).trim();
+                                if (ht === "班級" || ht === "Class") classIdx = colIdx;
+                                else if (ht === "座號" || ht === "No" || ht === "No.") numIdx = colIdx;
+                                else if (ht === "姓名" || ht === "Name") nameIdx = colIdx;
+                                else if (ht) { // 其他視為成績欄位
+                                    sheetGradeMap.push({ colIdx, headerText: ht });
+                                    globalHeadersSet.add(ht); // 加入全域標題集合
+                                }
+                            });
+
+                            // 解析每一列資料
+                            for (let i = 1; i < jsonData.length; i++) {
+                                const row = jsonData[i];
+                                if (!row || row.length === 0) continue;
+
+                                // 判斷班級名稱：優先使用欄位內的「班級」，若無則使用「工作表名稱」
+                                let className = "";
+                                if (classIdx !== -1 && row[classIdx]) {
+                                    className = String(row[classIdx]).trim();
+                                } else {
+                                    className = sheetName.trim();
+                                }
+
+                                const studentTemp = {
+                                    tempId: currentId++,
+                                    className: className,
+                                    number: numIdx !== -1 ? String(row[numIdx] || "").trim() : "",
+                                    name: nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "",
+                                    gradesMap: {} // 先用物件暫存成績，方便最後整合： { "國文": 90, "英文": 80 }
+                                };
+
+                                // 讀取成績
+                                sheetGradeMap.forEach(map => {
+                                    const val = row[map.colIdx];
+                                    let numVal = (val === undefined || val === null || val === "") ? "" : parseFloat(val);
+                                    if (numVal !== "" && !isNaN(numVal)) {
+                                        if (numVal < 0) numVal = 0;
+                                        if (numVal > 100) numVal = 100;
+                                        studentTemp.gradesMap[map.headerText] = numVal;
+                                    }
+                                });
+                                
+                                // 只有當有姓名或座號時才視為有效資料
+                                if (studentTemp.name || studentTemp.number) {
+                                    allNewStudents.push(studentTemp);
+                                }
                             }
                         });
-                        
-                        // If no headers found (weird file), default to empty list or prompt?
-                        // Assuming valid import has headers
-                        
-                        const newStudents = [];
-                        let currentId = 1;
-                        for (let i = 1; i < jsonData.length; i++) {
-                            const row = jsonData[i];
-                            if (!row || row.length === 0) continue;
-                            const student = {
-                                id: currentId++,
-                                className: classIdx !== -1 ? String(row[classIdx] || "").trim() : "",
-                                number: numIdx !== -1 ? String(row[numIdx] || "").trim() : "",
-                                name: nameIdx !== -1 ? String(row[nameIdx] || "").trim() : "",
-                                grades: Array(detectedHeaders.length).fill("")
-                            };
-                            gradeColMapping.forEach((map, gradeIdx) => {
-                                const val = row[map.colIdx];
-                                let numVal = (val === undefined || val === null || val === "") ? "" : parseFloat(val);
-                                if (numVal !== "" && !isNaN(numVal)) { if (numVal < 0) numVal = 0; if (numVal > 100) numVal = 100; student.grades[gradeIdx] = numVal; }
-                            });
-                            newStudents.push(student);
+
+                        if (allNewStudents.length === 0) {
+                            alert("Excel 中找不到有效的學生資料。");
+                            return;
                         }
-                        if (confirm(`準備匯入 ${newStudents.length} 筆資料。\n這將會覆蓋目前的資料並重設項目欄位，確定嗎？`)) {
-                            setHeaders(detectedHeaders);
-                            setStudents(newStudents);
+
+                        // 將 Set 轉為陣列，確認最終的所有欄位
+                        const finalHeaders = Array.from(globalHeadersSet);
+                        
+                        // 將暫存的學生資料轉換為系統使用的陣列格式 [score1, score2, ...]
+                        const finalStudents = allNewStudents.map(s => {
+                            const gradeArray = finalHeaders.map(h => {
+                                // 根據標題名稱去查找該學生的成績，如果該 Sheet 沒這個科目就留空
+                                return s.gradesMap[h] !== undefined ? s.gradesMap[h] : "";
+                            });
+                            return {
+                                id: s.tempId,
+                                className: s.className,
+                                number: s.number,
+                                name: s.name,
+                                grades: gradeArray
+                            };
+                        });
+
+                        if (confirm(`準備匯入 ${finalStudents.length} 筆資料 (來自 ${workbook.SheetNames.length} 個工作表)。\n這將會覆蓋目前的資料並重設項目欄位，確定嗎？`)) {
+                            setHeaders(finalHeaders.length > 0 ? finalHeaders : INITIAL_HEADERS);
+                            setStudents(finalStudents);
                             setCustomClasses([]);
                             setCurrentClassView("All");
-                            // Reset stat selection
                             setSelectedStatItem(0);
                             alert("匯入成功！");
                         }
-                    } catch (err) { console.error(err); alert("讀取失敗，請確認檔案格式是否正確。"); }
+                    } catch (err) { 
+                        console.error(err); 
+                        alert("讀取失敗，請確認檔案格式是否正確。"); 
+                    }
                     fileInputRef.current.value = "";
                 };
                 reader.readAsBinaryString(file);
@@ -584,7 +734,6 @@
             };
 
             const statsData = useMemo(() => {
-                // Safety check for index out of bounds if headers deleted
                 const safeIndex = selectedStatItem < headers.length ? selectedStatItem : 0;
                 const currentHeaderName = headers[safeIndex] || "未知";
                 
@@ -622,7 +771,7 @@
                                 <p className="text-gray-500 font-medium mt-2 flex items-center gap-4 text-sm">
                                     <span className="flex items-center"><i className="fa-solid fa-cloud-arrow-up text-green-500 mr-1.5"></i>自動儲存</span>
                                     <span className="flex items-center"><i className="fa-solid fa-file-excel text-green-600 mr-1.5"></i>Excel 整合</span>
-                                    <span className="flex items-center"><i className="fa-solid fa-trophy text-yellow-500 mr-1.5"></i>班級排名</span>
+                                    <span className="flex items-center"><i className="fa-solid fa-keyboard text-purple-500 mr-1.5"></i>鍵盤導航</span>
                                 </p>
                             </div>
                             <div className="flex gap-3 flex-wrap justify-center">
@@ -637,229 +786,290 @@
                                     <i className="fa-regular fa-copy mr-2"></i>複製項目
                                 </button>
                                 <button onClick={triggerFileUpload} className="px-4 py-2 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm">
-                                    <i className="fa-solid fa-file-import mr-2"></i>匯入
+                                    <i className="fa-solid fa-file-import mr-2"></i>匯入 Excel
                                 </button>
-                                <button onClick={exportExcel} className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm">
-                                    <i className="fa-solid fa-download mr-2"></i>匯出
+                                <button onClick={exportExcel} className="px-4 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors shadow-md hover:shadow-lg flex items-center text-sm">
+                                    <i className="fa-solid fa-file-export mr-2"></i>匯出 Excel
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white/90 backdrop-blur rounded-2xl shadow-xl border border-white overflow-hidden min-h-[600px] flex flex-col relative z-10">
-                        {activeTab === 'input' && (
-                            <div className="flex flex-col h-full">
-                                <div className="px-4 pt-4 border-b border-orange-100 bg-orange-50/50 overflow-x-auto custom-scrollbar">
-                                    <div className="flex gap-2 pb-0">
-                                        <button onClick={() => setCurrentClassView("All")} className={`px-5 py-2.5 rounded-t-xl font-bold text-sm border-t border-l border-r transition-all duration-200 ${currentClassView === "All" ? 'tab-active' : 'tab-inactive border-b-transparent'}`}>全部學生</button>
-                                        {availableClasses.map(cls => (
-                                            <button key={cls} onClick={() => setCurrentClassView(cls)} className={`px-5 py-2.5 rounded-t-xl font-bold text-sm border-t border-l border-r transition-all duration-200 ${currentClassView === cls ? 'tab-active' : 'tab-inactive border-b-transparent'}`}>{cls}班</button>
-                                        ))}
-                                        <button onClick={handleAddClassTab} className="px-4 py-2 text-orange-600 hover:text-orange-800 font-bold text-sm flex items-center bg-transparent hover:bg-orange-100 rounded-lg transition-all ml-2">
-                                            <i className="fa-solid fa-plus mr-1.5"></i>新增
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 border-b border-orange-100 bg-white flex justify-between items-center flex-wrap gap-4">
-                                    <h2 className="font-bold text-gray-800 text-lg flex items-center">
-                                        {currentClassView === "All" ? "所有學生名單" : `${currentClassView}班 成績表`} 
-                                        <span className="ml-3 text-xs font-bold text-orange-600 bg-orange-100 px-3 py-1 rounded-full border border-orange-200">
-                                            {displayedStudents.length} 人
-                                        </span>
-                                    </h2>
-                                    <div className="flex gap-2 flex-wrap items-center">
-                                        {currentClassView !== "All" && (
-                                            <>
-                                                <button onClick={handleRenameClass} className="text-sm bg-gray-50 text-gray-600 px-4 py-1.5 rounded-lg hover:bg-gray-100 border border-gray-200 font-bold transition-all"><i className="fa-solid fa-pen mr-1.5"></i>更名</button>
-                                                <button onClick={handleDeleteClass} className="text-sm bg-rose-50 text-rose-600 px-4 py-1.5 rounded-lg hover:bg-rose-100 border border-rose-200 font-bold mr-2 transition-all"><i className="fa-solid fa-trash mr-1.5"></i>刪除</button>
-                                            </>
-                                        )}
-                                        <div className="hidden lg:flex items-center gap-2 mr-2 px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg border border-yellow-200 text-xs font-medium">
-                                            <i className="fa-regular fa-lightbulb"></i>
-                                            提示：點選格子後按 Ctrl+V 可貼上
-                                        </div>
-                                        <button onClick={addStudent} className="text-sm bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-bold shadow-md hover:shadow-lg transition-all transform active:scale-95">
-                                            <i className="fa-solid fa-user-plus mr-1.5"></i>
-                                            {currentClassView === "All" ? "新增學生" : `新增 ${currentClassView}班 學生`}
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex-1 table-container overflow-auto relative bg-orange-50/20">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead className="bg-orange-100 text-orange-900 font-bold sticky top-0 z-10 shadow-sm">
-                                            <tr>
-                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[60px] text-center sticky left-0 bg-orange-100 z-20">刪除</th>
-                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[80px] sticky left-[60px] bg-orange-100 z-20">班級</th>
-                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[60px] sticky left-[140px] bg-orange-100 z-20">號碼</th>
-                                                <th className="p-3 border-b border-orange-200 border-r border-orange-200 min-w-[120px] sticky left-[200px] bg-orange-100 z-20 shadow-[4px_0_10px_-4px_rgba(249,115,22,0.1)]">姓名</th>
-                                                {headers.map((h, idx) => (
-                                                    <th key={idx} className="p-2 border-b border-orange-200 border-r border-orange-200 min-w-[90px] text-center group relative hover:bg-orange-200 transition-colors">
-                                                        <div className="flex flex-col items-center justify-between h-full">
-                                                            {/* Delete Button (visible on hover) */}
-                                                            <div className="w-full flex justify-end mb-1">
-                                                                <button 
-                                                                    onClick={(e) => { e.stopPropagation(); removeHeader(idx); }} 
-                                                                    className="delete-col-btn text-rose-400 hover:text-rose-600 text-xs px-1 rounded hover:bg-rose-100 transition-colors"
-                                                                    title="刪除此項目"
-                                                                >
-                                                                    <i className="fa-solid fa-trash-can"></i>
-                                                                </button>
-                                                            </div>
-                                                            {editingHeader === idx ? (
-                                                                <input autoFocus type="text" className="w-full text-center border-2 border-orange-400 rounded p-1 bg-white shadow-inner" value={h} onChange={(e) => updateHeader(idx, e.target.value)} onPaste={(e) => handleHeaderPaste(e, idx)} onBlur={() => setEditingHeader(null)} onKeyDown={(e) => e.key === 'Enter' && setEditingHeader(null)} />
-                                                            ) : (
-                                                                <div className="flex items-center justify-center gap-1 cursor-pointer w-full" onClick={() => setEditingHeader(idx)}>
-                                                                    <span>{h}</span><i className="fa-solid fa-pencil text-[10px] opacity-0 group-hover:opacity-40 ml-1"></i>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </th>
-                                                ))}
-                                                {/* Add Header Button */}
-                                                <th className="p-2 border-b border-orange-200 border-r border-orange-200 min-w-[50px] text-center bg-orange-50 hover:bg-orange-200 cursor-pointer transition-colors" onClick={addHeader} title="新增項目">
-                                                    <i className="fa-solid fa-plus text-orange-500 text-lg"></i>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {displayedStudents.map((student) => (
-                                                <tr key={student.id} className="group hover:bg-orange-50 transition-colors border-b border-orange-100">
-                                                    <td className="p-2 border-r border-orange-100 text-center sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
-                                                        <button onClick={() => removeStudent(student.id)} className="text-gray-300 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 transition-all"><i className="fa-solid fa-xmark text-lg"></i></button>
-                                                    </td>
-                                                    <td className="p-1 border-r border-orange-100 sticky left-[60px] bg-white group-hover:bg-orange-50 z-10 transition-colors"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded text-center font-medium text-gray-700" value={student.className} onChange={(e) => updateStudentInfo(student.id, 'className', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 0)} /></td>
-                                                    <td className="p-1 border-r border-orange-100 sticky left-[140px] bg-white group-hover:bg-orange-50 z-10 transition-colors"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded text-center font-medium text-gray-700" value={student.number} onChange={(e) => updateStudentInfo(student.id, 'number', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 1)} /></td>
-                                                    <td className="p-1 border-r border-orange-100 sticky left-[200px] bg-white group-hover:bg-orange-50 z-10 transition-colors shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"><input type="text" className="w-full p-2 outline-none bg-transparent focus:bg-white focus:ring-2 focus:ring-orange-300 rounded font-bold text-gray-800" value={student.name} onChange={(e) => updateStudentInfo(student.id, 'name', e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'meta', 2)} /></td>
-                                                    {student.grades.map((g, idx) => (
-                                                        <td key={idx} className="p-1 border-r border-orange-100 text-center">
-                                                            <input type="number" className={`w-full p-2 text-center outline-none rounded focus:ring-2 focus:ring-orange-300 transition-all font-mono text-base ${(g === "" || g === null) ? 'empty-grade' : ''} ${g !== "" && g < 60 ? 'text-rose-600 font-bold bg-rose-50' : ''} ${g === 100 ? 'text-emerald-600 font-bold bg-emerald-50' : ''}`} value={g} onChange={(e) => updateGrade(student.id, idx, e.target.value)} onPaste={(e) => handlePaste(e, student.id, 'grade', idx)} />
-                                                        </td>
-                                                    ))}
-                                                    {/* Empty cell for add button alignment */}
-                                                    <td className="p-1 border-r border-orange-100 bg-gray-50/50"></td>
-                                                </tr>
-                                            ))}
-                                            {displayedStudents.length === 0 && (
-                                                <tr><td colSpan={headers.length + 5}><EmptyState message="此班級尚無學生資料，快來新增第一位學生吧！" action={addStudent} actionText="新增學生" /></td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    {/* Class Tabs */}
+                    <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+                        <button 
+                            onClick={() => setCurrentClassView("All")}
+                            className={`px-4 py-2 rounded-t-lg font-bold transition-all whitespace-nowrap ${currentClassView === "All" ? "bg-white text-orange-600 border-t-2 border-orange-500 shadow-sm" : "bg-orange-50/50 text-gray-500 hover:bg-white"}`}
+                        >
+                            <i className="fa-solid fa-layer-group mr-2"></i>全部學生
+                        </button>
+                        {availableClasses.map(cls => (
+                            <button 
+                                key={cls}
+                                onClick={() => setCurrentClassView(cls)}
+                                onDoubleClick={handleRenameClass}
+                                className={`px-4 py-2 rounded-t-lg font-bold transition-all whitespace-nowrap flex items-center gap-2 ${currentClassView === cls ? "bg-white text-orange-600 border-t-2 border-orange-500 shadow-sm" : "bg-orange-50/50 text-gray-500 hover:bg-white"}`}
+                                title="雙擊可重新命名"
+                            >
+                                {cls}
+                            </button>
+                        ))}
+                        <button onClick={handleAddClassTab} className="px-3 py-1 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-full text-sm transition-colors" title="新增班級分頁">
+                            <i className="fa-solid fa-plus"></i>
+                        </button>
+                        <div className="flex-1"></div>
+                        {currentClassView !== "All" && (
+                            <button onClick={handleDeleteClass} className="text-red-400 hover:text-red-600 text-sm px-3 py-1 hover:bg-red-50 rounded transition">
+                                <i className="fa-solid fa-trash-can mr-1"></i>刪除此班級
+                            </button>
                         )}
+                    </div>
 
-                        {activeTab === 'stats' && (
-                            <div className="p-6 md:p-8 bg-gradient-to-br from-white to-orange-50/50 min-h-full">
-                                {/* Control Panel */}
-                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 mb-8 flex flex-col md:flex-row gap-6 items-center justify-between">
-                                    <div className="flex items-center gap-3 bg-orange-50 px-4 py-2 rounded-xl">
-                                        <div className="bg-rose-500 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md"><i className="fa-solid fa-users"></i></div>
-                                        <label className="font-bold text-gray-700 text-sm">對象：</label>
-                                        <select className="bg-transparent font-bold text-gray-800 outline-none cursor-pointer w-[180px]" value={currentClassView} onChange={(e) => setCurrentClassView(e.target.value)}>
-                                            <option value="All">全部年級 / 所有班級</option>
-                                            {availableClasses.map(cls => (<option key={cls} value={cls}>{cls}班</option>))}
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-xl">
-                                        <div className="bg-blue-500 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-md"><i className="fa-solid fa-list-check"></i></div>
-                                        <label className="font-bold text-gray-700 text-sm">項目：</label>
-                                        <select className="bg-transparent font-bold text-gray-800 outline-none cursor-pointer w-[180px]" value={selectedStatItem} onChange={(e) => setSelectedStatItem(parseInt(e.target.value))}>
-                                            {headers.map((h, idx) => (<option key={idx} value={idx}>{h}</option>))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-8 mb-8">
-                                    {/* Stats Card */}
-                                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-purple-100 relative overflow-hidden group hover:shadow-xl transition-all">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100 rounded-full -translate-y-1/2 translate-x-1/2 opacity-50 group-hover:scale-110 transition-transform"></div>
-                                        <h3 className="text-xl font-black text-gray-800 mb-6 flex justify-between items-center relative z-10">
-                                            <span><i className="fa-solid fa-chart-simple text-purple-500 mr-3"></i>成績概況</span>
-                                            <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-bold">{currentClassView === "All" ? "全校" : `${currentClassView}班`}</span>
-                                        </h3>
-                                        <div className="grid grid-cols-2 gap-4 relative z-10">
-                                            <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 p-5 rounded-2xl text-center border border-purple-100">
-                                                <div className="text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">有效人數</div>
-                                                <div className="text-4xl font-black text-purple-600">{statsData.total}</div>
-                                            </div>
-                                            <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-5 rounded-2xl text-center border border-orange-100">
-                                                <div className="text-xs font-bold text-orange-400 mb-2 uppercase tracking-wider">平均分數</div>
-                                                <div className="text-4xl font-black text-orange-600">{statsData.avg}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Distribution Table */}
-                                    <div className="bg-white rounded-2xl shadow-lg border border-orange-100 overflow-hidden hover:shadow-xl transition-all">
-                                        <div className="p-4 bg-orange-50 border-b border-orange-100 font-bold text-gray-700 flex items-center">
-                                            <i className="fa-solid fa-layer-group text-orange-500 mr-2"></i> 分數分佈
-                                        </div>
-                                        <table className="w-full text-sm">
-                                            <tbody>
-                                                {statsData.distribution.map((d, i) => (
-                                                    <tr key={i} className="border-b border-orange-50 hover:bg-orange-50/50 transition-colors last:border-0">
-                                                        <td className="p-3 pl-5 font-bold text-gray-600">{d.label}</td>
-                                                        <td className="p-3 text-right font-mono font-bold text-gray-800">{d.count} <span className="text-xs text-gray-400 font-normal">人</span></td>
-                                                        <td className="p-3 text-right text-gray-500 w-16">{d.percentage}%</td>
-                                                        <td className="p-3 pr-5">
-                                                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden shadow-inner">
-                                                                <div className={`h-3 rounded-full ${i === statsData.distribution.length - 1 ? 'bg-rose-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`} style={{ width: `${d.percentage}%`, transition: 'width 1s ease-out' }}></div>
-                                                            </div>
-                                                        </td>
+                    {/* Main Content Area */}
+                    <div className="bg-white rounded-b-2xl rounded-tr-2xl shadow-xl min-h-[600px] border-t border-orange-100 overflow-hidden relative">
+                        {activeTab === 'input' ? (
+                            <div className="flex flex-col h-full">
+                                {displayedStudents.length === 0 ? (
+                                    <EmptyState message="目前這個班級還沒有學生資料喔！" action={addStudent} actionText="新增第一位學生" />
+                                ) : (
+                                    <>
+                                        <div className="overflow-auto flex-1 table-container max-h-[70vh]">
+                                            <table className="w-full text-left border-collapse min-w-max">
+                                                <thead className="bg-orange-50 sticky top-0 z-20 shadow-sm">
+                                                    <tr>
+                                                        <th className="p-3 w-16 text-center font-bold text-gray-600 border-b border-orange-200 sticky left-0 bg-orange-50 z-30">#</th>
+                                                        <th className="p-3 w-20 font-bold text-gray-600 border-b border-orange-200 sticky left-16 bg-orange-50 z-30">班級</th>
+                                                        <th className="p-3 w-20 font-bold text-gray-600 border-b border-orange-200 sticky left-36 bg-orange-50 z-30">座號</th>
+                                                        <th className="p-3 w-32 font-bold text-gray-600 border-b border-orange-200 sticky left-56 bg-orange-50 z-30 border-r-2 border-r-orange-200">姓名</th>
+                                                        {headers.map((h, idx) => (
+                                                            <th key={idx} className="p-3 w-28 text-center font-bold text-gray-600 border-b border-orange-200 relative group">
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    {editingHeader === idx ? (
+                                                                        <input 
+                                                                            autoFocus
+                                                                            type="text" 
+                                                                            className="w-full text-center text-sm border-b-2 border-orange-400 outline-none bg-transparent"
+                                                                            value={h}
+                                                                            onBlur={() => setEditingHeader(null)}
+                                                                            onKeyDown={(e) => { if(e.key === 'Enter') setEditingHeader(null); }}
+                                                                            onChange={(e) => updateHeader(idx, e.target.value)}
+                                                                            onPaste={(e) => handleHeaderPaste(e, idx)}
+                                                                        />
+                                                                    ) : (
+                                                                        <span 
+                                                                            onDoubleClick={() => setEditingHeader(idx)}
+                                                                            className="cursor-pointer hover:text-orange-600 transition"
+                                                                            title="雙擊可更名，在此貼上可批次修改標題"
+                                                                        >
+                                                                            {h}
+                                                                        </span>
+                                                                    )}
+                                                                    <button 
+                                                                        onClick={() => removeHeader(idx)}
+                                                                        className="delete-col-btn absolute top-1 right-1 text-red-300 hover:text-red-500 bg-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm"
+                                                                        title="刪除此欄位"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                </div>
+                                                            </th>
+                                                        ))}
+                                                        <th className="p-3 w-12 text-center border-b border-orange-200">
+                                                            <button onClick={addHeader} className="text-orange-500 hover:text-orange-700 bg-orange-100 w-8 h-8 rounded-full flex items-center justify-center transition hover:scale-110">
+                                                                <i className="fa-solid fa-plus"></i>
+                                                            </button>
+                                                        </th>
                                                     </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {displayedStudents.map((s, rIndex) => (
+                                                        <tr key={s.id} className="hover:bg-orange-50/30 transition-colors group">
+                                                            <td className="p-2 text-center text-gray-400 text-xs font-mono sticky left-0 bg-white group-hover:bg-orange-50/30 z-10 border-r">{rIndex + 1}</td>
+                                                            <td className="p-1 sticky left-16 bg-white group-hover:bg-orange-50/30 z-10 border-r">
+                                                                <input 
+                                                                    id={`cell-${rIndex}-0`}
+                                                                    type="text" 
+                                                                    value={s.className || ""} 
+                                                                    onChange={(e) => updateStudentInfo(s.id, "className", e.target.value)}
+                                                                    onKeyDown={(e) => handleKeyDown(e, rIndex, 0)}
+                                                                    onPaste={(e) => handlePaste(e, s.id, 'meta', 0)}
+                                                                    className="w-full p-2 text-sm text-center border-transparent bg-transparent hover:border-gray-200 focus:bg-white focus:border-orange-400 rounded outline-none transition"
+                                                                    placeholder="班級"
+                                                                />
+                                                            </td>
+                                                            <td className="p-1 sticky left-36 bg-white group-hover:bg-orange-50/30 z-10 border-r">
+                                                                <input 
+                                                                    id={`cell-${rIndex}-1`}
+                                                                    type="text" 
+                                                                    value={s.number || ""} 
+                                                                    onChange={(e) => updateStudentInfo(s.id, "number", e.target.value)}
+                                                                    onKeyDown={(e) => handleKeyDown(e, rIndex, 1)}
+                                                                    onPaste={(e) => handlePaste(e, s.id, 'meta', 1)}
+                                                                    className="w-full p-2 text-sm text-center border-transparent bg-transparent hover:border-gray-200 focus:bg-white focus:border-orange-400 rounded outline-none transition"
+                                                                    placeholder="座號"
+                                                                />
+                                                            </td>
+                                                            <td className="p-1 sticky left-56 bg-white group-hover:bg-orange-50/30 z-10 border-r-2 border-r-orange-100 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.05)]">
+                                                                <input 
+                                                                    id={`cell-${rIndex}-2`}
+                                                                    type="text" 
+                                                                    value={s.name || ""} 
+                                                                    onChange={(e) => updateStudentInfo(s.id, "name", e.target.value)}
+                                                                    onKeyDown={(e) => handleKeyDown(e, rIndex, 2)}
+                                                                    onPaste={(e) => handlePaste(e, s.id, 'meta', 2)}
+                                                                    className="w-full p-2 text-sm border-transparent bg-transparent hover:border-gray-200 focus:bg-white focus:border-orange-400 rounded outline-none transition font-medium text-gray-700"
+                                                                    placeholder="姓名"
+                                                                />
+                                                            </td>
+                                                            {s.grades.map((g, idx) => (
+                                                                <td key={idx} className="p-1 text-center relative">
+                                                                    <input 
+                                                                        id={`cell-${rIndex}-${3 + idx}`}
+                                                                        type="number" 
+                                                                        value={g} 
+                                                                        onChange={(e) => updateGrade(s.id, idx, e.target.value)}
+                                                                        onKeyDown={(e) => handleKeyDown(e, rIndex, 3 + idx)}
+                                                                        onPaste={(e) => handlePaste(e, s.id, 'grade', idx)}
+                                                                        className={`w-full p-2 text-center rounded outline-none font-mono text-gray-700 ${g === "" ? "empty-grade" : "bg-transparent hover:bg-white border border-transparent focus:border-blue-400 focus:bg-white"} ${g !== "" && parseFloat(g) < 60 ? "text-red-500 font-bold" : ""}`}
+                                                                    />
+                                                                </td>
+                                                            ))}
+                                                            <td className="p-2 text-center">
+                                                                <button onClick={() => removeStudent(s.id)} className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100" title="刪除學生">
+                                                                    <i className="fa-solid fa-times"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center sticky bottom-0 z-20">
+                                            <button onClick={() => addStudent()} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 px-8 py-2 rounded-full shadow-sm transition-all transform hover:scale-105 active:scale-95">
+                                                <i className="fa-solid fa-plus"></i> 新增下一位學生
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-8 bg-gradient-to-br from-white to-orange-50/30 h-full overflow-y-auto">
+                                <div className="max-w-6xl mx-auto">
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <label className="text-lg font-bold text-gray-700">選擇分析項目：</label>
+                                        <div className="relative">
+                                            <select 
+                                                value={selectedStatItem} 
+                                                onChange={(e) => setSelectedStatItem(parseInt(e.target.value))}
+                                                className="appearance-none bg-white border-2 border-orange-200 text-gray-700 py-2 pl-4 pr-10 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 font-bold shadow-sm transition-all cursor-pointer"
+                                            >
+                                                {headers.map((h, i) => (
+                                                    <option key={i} value={i}>{h}</option>
                                                 ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Class Ranking Section */}
-                                <div className="bg-white p-8 rounded-2xl shadow-lg border border-amber-100 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-300 via-orange-400 to-rose-400"></div>
-                                    <h3 className="text-2xl font-black text-gray-800 mb-8 flex items-center">
-                                        <i className="fa-solid fa-trophy text-amber-500 mr-3 text-3xl drop-shadow-sm"></i>
-                                        班級榮譽榜 <span className="text-sm font-normal text-gray-500 ml-3 mt-2">({statsData.currentHeaderName})</span>
-                                    </h3>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {classRankings.length === 0 && (
-                                            <div className="col-span-3">
-                                                <EmptyState message="還沒有足夠的資料來產生排名喔！" />
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-orange-500">
+                                                <i className="fa-solid fa-chevron-down text-sm"></i>
                                             </div>
+                                        </div>
+                                        {statsData.isFiltered && (
+                                            <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm font-bold">
+                                                目前顯示：{currentClassView}
+                                            </span>
                                         )}
-                                        
-                                        {classRankings.map((cls, idx) => (
-                                            <div key={cls.className} className={`rank-card p-5 rounded-2xl flex items-center justify-between relative ${idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'bg-white border border-gray-100 hover:border-gray-300'}`}>
-                                                
-                                                <div className="flex items-center gap-4 z-10">
-                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-md transform rotate-3
-                                                        ${idx === 0 ? 'bg-yellow-400 text-white' : 
-                                                          idx === 1 ? 'bg-slate-400 text-white' : 
-                                                          idx === 2 ? 'bg-orange-400 text-white' : 
-                                                          'bg-gray-100 text-gray-400'}`}>
-                                                        {idx + 1}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-black text-gray-800 text-xl">{cls.className} <span className="text-sm font-normal text-gray-500">班</span></div>
-                                                        <div className="text-xs font-bold text-gray-400 bg-white/50 px-2 py-0.5 rounded-full inline-block mt-1">人數: {cls.count}</div>
-                                                    </div>
-                                                </div>
+                                    </div>
 
-                                                <div className="z-10 text-right">
-                                                    <div className="text-3xl font-black text-gray-700 tracking-tighter">{cls.avg}</div>
-                                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">AVG</div>
-                                                </div>
-
-                                                {idx === 0 && (
-                                                    <>
-                                                        <div className="absolute -right-6 -top-6 text-8xl opacity-10 text-yellow-600"><i className="fa-solid fa-crown"></i></div>
-                                                        <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-xl crown-icon shadow-sm">NO.1 冠軍</div>
-                                                    </>
-                                                )}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-100 flex items-center gap-4 relative overflow-hidden group">
+                                            <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:scale-110"></div>
+                                            <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-500 flex items-center justify-center text-2xl relative z-10">
+                                                <i className="fa-solid fa-users"></i>
                                             </div>
-                                        ))}
+                                            <div>
+                                                <p className="text-gray-500 font-medium mb-1">有效人數</p>
+                                                <p className="text-4xl font-black text-gray-800">{statsData.total}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-100 flex items-center gap-4 relative overflow-hidden group">
+                                            <div className="absolute right-0 top-0 w-24 h-24 bg-green-50 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:scale-110"></div>
+                                            <div className="w-16 h-16 rounded-2xl bg-green-100 text-green-500 flex items-center justify-center text-2xl relative z-10">
+                                                <i className="fa-solid fa-chart-line"></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-500 font-medium mb-1">平均分數</p>
+                                                <p className={`text-4xl font-black ${parseFloat(statsData.avg) < 60 ? "text-red-500" : "text-gray-800"}`}>{statsData.avg}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white p-6 rounded-2xl shadow-lg border border-orange-100 flex items-center gap-4 relative overflow-hidden group">
+                                            <div className="absolute right-0 top-0 w-24 h-24 bg-purple-50 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:scale-110"></div>
+                                            <div className="w-16 h-16 rounded-2xl bg-purple-100 text-purple-500 flex items-center justify-center text-2xl relative z-10">
+                                                <i className="fa-solid fa-percent"></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-500 font-medium mb-1">及格率</p>
+                                                <p className="text-4xl font-black text-gray-800">
+                                                    {statsData.total > 0 ? (statsData.distribution.slice(0, 5).reduce((a, b) => a + b.count, 0) / statsData.total * 100).toFixed(0) : 0}%
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100">
+                                            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                                                <i className="fa-solid fa-chart-simple mr-2 text-orange-500"></i>
+                                                分數分佈
+                                            </h3>
+                                            <div className="space-y-4">
+                                                {statsData.distribution.map((d, i) => (
+                                                    <div key={i} className="relative">
+                                                        <div className="flex justify-between text-sm mb-1 font-bold text-gray-600">
+                                                            <span>{d.label}</span>
+                                                            <span>{d.count} 人 ({d.percentage}%)</span>
+                                                        </div>
+                                                        <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className={`h-full ${d.color} transition-all duration-1000 ease-out`} 
+                                                                style={{width: `${d.percentage}%`}}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100">
+                                            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                                                <i className="fa-solid fa-trophy mr-2 text-yellow-500"></i>
+                                                班級排行榜 ({statsData.currentHeaderName})
+                                            </h3>
+                                            {classRankings.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {classRankings.map((cls, idx) => (
+                                                        <div key={cls.className} className={`rank-card flex items-center justify-between p-4 rounded-xl ${idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'bg-gray-50 border border-gray-200'}`}>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg ${idx === 0 ? 'bg-yellow-400 text-white shadow-md' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                                                    {idx + 1}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-bold text-gray-800 text-lg">{cls.className}</p>
+                                                                    <p className="text-xs text-gray-500 font-medium">{cls.count} 位學生</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {idx === 0 && <i className="fa-solid fa-crown text-yellow-500 text-xl crown-icon"></i>}
+                                                                <span className="font-mono font-bold text-2xl text-gray-800">{cls.avg}</span>
+                                                                <span className="text-xs text-gray-400 font-bold mt-2">分</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="h-40 flex flex-col items-center justify-center text-gray-400">
+                                                    <i className="fa-regular fa-folder-open text-4xl mb-2 opacity-50"></i>
+                                                    <p>尚無足夠數據進行排名</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
